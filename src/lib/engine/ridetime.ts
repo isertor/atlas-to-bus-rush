@@ -38,3 +38,35 @@ export function liveAlightMs(
 
   return matches[0]?.arrivalMs ?? null;
 }
+
+/**
+ * Estimate when the bus you're ALREADY riding reaches a far-downstream stop,
+ * when you can't GPS-match it (you're on it, and it may be beyond the API's
+ * next-3 window). Strategy (per the long "stay on 21" leg):
+ *
+ *   - You expect the ride to take ~`expectedRideMs` (a configured typical time).
+ *   - Among the service's predicted arrivals at the far stop, DISCARD the
+ *     implausibly-early ones — those are buses ahead of you, not yours.
+ *   - Of what's left, pick the arrival closest to your expected time.
+ *
+ * Returns null when nothing plausible is predicted yet (fall back to the
+ * configured estimate).
+ */
+export function refineAboardAlightMs(
+  arrivals: ArrivalIndex,
+  alightStopCode: string,
+  service: string,
+  boardMs: number,
+  expectedRideMs: number,
+): number | null {
+  const list = arrivals[arrivalKey(alightStopCode, service)] ?? [];
+  const expected = boardMs + expectedRideMs;
+  // A bus arriving in under half the expected ride is ahead of you, not yours.
+  const earliest = boardMs + expectedRideMs * 0.5;
+  const plausible = list.filter((a) => a.arrivalMs >= earliest);
+  if (plausible.length === 0) return null;
+  return plausible.reduce(
+    (best, a) => (Math.abs(a.arrivalMs - expected) < Math.abs(best - expected) ? a.arrivalMs : best),
+    plausible[0].arrivalMs,
+  );
+}

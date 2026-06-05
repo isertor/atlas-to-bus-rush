@@ -1,6 +1,6 @@
 import type { Preferences } from "@/config/preferences";
 import { MIN } from "@/lib/time";
-import { liveAlightMs } from "./ridetime";
+import { liveAlightMs, refineAboardAlightMs } from "./ridetime";
 import {
   arrivalKey,
   type ArrivalIndex,
@@ -106,10 +106,14 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
 
     const ride = leg as RideLeg;
 
-    // You're already on this bus (en-route "stay on" leg): no wait, no lookup.
+    // You're already on this bus (en-route "stay on" leg). Can't GPS-match the
+    // bus you're on, so estimate its arrival at the far stop from the configured
+    // typical time, refined against the live ETAs there when possible.
     if (ride.alreadyAboard) {
       const boardMs = cursorReadyMs;
-      const alightMs = boardMs + ride.rideMinutes * MIN;
+      const expectedRideMs = ride.rideMinutes * MIN;
+      const refined = refineAboardAlightMs(arrivals, ride.alight.code, ride.service, boardMs, expectedRideMs);
+      const alightMs = refined ?? boardMs + expectedRideMs;
       rides.push({
         service: ride.service,
         board: ride.board,
@@ -119,7 +123,7 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
         waitMin: 0,
         load: "UNKNOWN", // live load of the bus you're on isn't in the next-bus feed
         alreadyAboard: true,
-        rideTimeSource: "estimated", // you're already on it — no boarding bus to GPS-match
+        rideTimeSource: refined != null ? "live" : "estimated",
       });
       cursorReadyMs = alightMs;
       if (!firstRideSeen) {
