@@ -198,6 +198,26 @@ body {
   font-size: 12px;
 }
 
+.leg .ride {
+  font-size: 12px;
+}
+
+.leg .src {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.leg .src.live {
+  color: var(--good);
+  background: rgba(46, 204, 113, 0.15);
+}
+.leg .src.estimated {
+  color: var(--muted);
+  background: var(--surface-2);
+}
+
 /* Score badge */
 .score {
   display: inline-flex;

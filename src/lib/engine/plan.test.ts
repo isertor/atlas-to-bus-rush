@@ -81,6 +81,22 @@ describe("evaluatePlan", () => {
     expect(est.perceivedArriveMs).toBeGreaterThan(est.arriveHomeMs as number);
   });
 
+  it("uses live GPS-matched alight time over the configured rideMinutes when available", () => {
+    // 26 boards at 00002 @ +8 with a GPS position; the same bus reaches the
+    // alight stop 00003 @ +25 (17 min ride) — not the configured 14 min.
+    const pos: [number, number] = [1.34, 103.9];
+    const live: ArrivalIndex = {
+      [arrivalKey("00001", "26")]: [{ arrivalMs: NOW + 8 * MIN, load: "SEA" }],
+      [arrivalKey("00002", "21")]: [{ arrivalMs: NOW + 20 * MIN, load: "SEA", lat: pos[0], lng: pos[1] }],
+      [arrivalKey("00003", "21")]: [{ arrivalMs: NOW + 39 * MIN, load: "SEA", lat: pos[0], lng: pos[1] }],
+    };
+    const est = evaluatePlan(PLAN, live, { now: NOW, prefs: PREFERENCES });
+    const ride21 = est.rides.find((r) => r.service === "21");
+    expect(ride21?.rideTimeSource).toBe("live");
+    // alight = live ETA at 00003 (+39), not board(+20) + configured 14 = +34
+    expect(ride21?.alightMs).toBe(NOW + 39 * MIN);
+  });
+
   it("from the transfer (fromLegIndex), evaluates only the remaining journey", () => {
     const est = evaluatePlan(PLAN, arrivals, {
       now: NOW,

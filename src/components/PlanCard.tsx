@@ -57,16 +57,26 @@ export function PlanCard({ option, now, recommended, emphasis = "leave" }: Props
       </div>
 
       <div className="legs">
-        {option.rides.map((r, i) => (
-          <div className="leg" key={i}>
-            <span className="svc">{r.service}</span>
-            <span className="detail">
-              {r.alreadyAboard ? "stay on" : "board"} {fmtClock(r.boardMs)} ({fmtRelative(r.boardMs, now)})
-              {r.waitMin > 0 ? <span className="wait"> · wait {r.waitMin}m</span> : null}
-            </span>
-            <CrowdBadge load={r.load} />
-          </div>
-        ))}
+        {option.rides.map((r, i) => {
+          const rideMin = Math.round((r.alightMs - r.boardMs) / 60000);
+          return (
+            <div className="leg" key={i}>
+              <span className="svc">{r.service}</span>
+              <span className="detail">
+                {r.alreadyAboard ? "stay on" : "board"} {fmtClock(r.boardMs)} ({fmtRelative(r.boardMs, now)})
+                <span className="ride">
+                  {" · "}
+                  {rideMin}m ride{" "}
+                  <span className={`src ${r.rideTimeSource}`}>
+                    {r.rideTimeSource === "live" ? "live" : "est"}
+                  </span>
+                </span>
+                {r.waitMin > 0 ? <span className="wait"> · wait {r.waitMin}m</span> : null}
+              </span>
+              <CrowdBadge load={r.load} />
+            </div>
+          );
+        })}
       </div>
     </div>
   );

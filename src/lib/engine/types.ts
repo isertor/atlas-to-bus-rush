@@ -73,6 +73,14 @@ export interface BusArrival {
   /** "WAB" if wheelchair accessible. */
   feature?: string;
   monitored?: boolean;
+  /**
+   * Live GPS position of this specific bus, when available. The SAME vehicle
+   * reports the SAME position whether queried via its board stop or alight
+   * stop, so this is the key we use to match a bus across stops and derive its
+   * live in-vehicle ride time. Absent for schedule-based (unmonitored) buses.
+   */
+  lat?: number;
+  lng?: number;
 }
 
 /**

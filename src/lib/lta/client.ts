@@ -49,12 +49,17 @@ function toArrival(nb: LtaNextBus | undefined): BusArrival | null {
   if (!nb || !nb.EstimatedArrival) return null;
   const ms = Date.parse(nb.EstimatedArrival);
   if (Number.isNaN(ms)) return null;
+  const lat = Number(nb.Latitude);
+  const lng = Number(nb.Longitude);
+  const hasPos = Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0);
   return {
     arrivalMs: ms,
     load: parseLoad(nb.Load),
     type: nb.Type || undefined,
     feature: nb.Feature || undefined,
     monitored: nb.Monitored === 1,
+    lat: hasPos ? lat : undefined,
+    lng: hasPos ? lng : undefined,
   };
 }
 

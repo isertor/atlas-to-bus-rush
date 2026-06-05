@@ -28,12 +28,18 @@ export interface RecommendResult {
   mock: boolean;
 }
 
-/** Every distinct stop code referenced by the configured plans. */
+/**
+ * Every distinct stop code referenced by the configured plans — both board AND
+ * alight stops, so we can derive live ride times by matching a bus across them.
+ */
 function stopsInPlans(plans: Plan[]): string[] {
   const set = new Set<string>();
   for (const plan of plans) {
     for (const leg of plan.legs) {
-      if (leg.kind === "ride") set.add(leg.board.code);
+      if (leg.kind === "ride") {
+        set.add(leg.board.code);
+        set.add(leg.alight.code);
+      }
     }
   }
   return [...set];

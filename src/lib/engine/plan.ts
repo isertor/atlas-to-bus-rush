@@ -1,8 +1,10 @@
 import type { Preferences } from "@/config/preferences";
 import { MIN } from "@/lib/time";
+import { liveAlightMs } from "./ridetime";
 import {
   arrivalKey,
   type ArrivalIndex,
+  type BusArrival,
   type LoadCode,
   type Plan,
   type RideLeg,
@@ -18,6 +20,8 @@ export interface ResolvedRide {
   waitMin: number;
   load: LoadCode;
   alreadyAboard: boolean;
+  /** Whether alight time came from live GPS matching or the configured estimate. */
+  rideTimeSource: "live" | "estimated";
 }
 
 export interface PlanEstimate {
@@ -115,6 +119,7 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
         waitMin: 0,
         load: "UNKNOWN", // live load of the bus you're on isn't in the next-bus feed
         alreadyAboard: true,
+        rideTimeSource: "estimated", // you're already on it — no boarding bus to GPS-match
       });
       cursorReadyMs = alightMs;
       if (!firstRideSeen) {
@@ -128,12 +133,14 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
     let boardMs: number;
     let load: LoadCode;
     let readyForRide: number;
+    let boardBus: BusArrival | null;
 
     if (!firstRideSeen && ctx.anchorFirstBoardMs != null) {
       // Leave-by board: pin the first bus, back-calculate the office leave time.
       boardMs = ctx.anchorFirstBoardMs;
       const list = arrivals[arrivalKey(ride.board.code, ride.service)] ?? [];
-      load = list.find((a) => a.arrivalMs === boardMs)?.load ?? "UNKNOWN";
+      boardBus = list.find((a) => a.arrivalMs === boardMs) ?? null;
+      load = boardBus?.load ?? "UNKNOWN";
       readyForRide = boardMs; // you target this bus, so wait ≈ 0
       leaveOfficeMs = boardMs - walkBeforeFirstRideMs - prefs.safetyBufferMin * MIN;
     } else {
@@ -144,12 +151,17 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
         return infeasible(plan.id, `No upcoming ${ride.service} at ${ride.board.name}`);
       }
       boardMs = next.arrivalMs;
+      boardBus = next;
       load = next.load;
       if (!firstRideSeen) leaveOfficeMs = now; // forward sim: you left now
     }
 
+    // Live in-vehicle ride time: match the boarded bus at the alight stop by GPS.
+    const live = boardBus ? liveAlightMs(arrivals, ride.alight.code, ride.service, boardBus) : null;
+    const useLive = live != null && live > boardMs;
+    const alightMs = useLive ? (live as number) : boardMs + ride.rideMinutes * MIN;
+
     const waitMin = Math.max(0, (boardMs - readyForRide) / MIN);
-    const alightMs = boardMs + ride.rideMinutes * MIN;
     crowdPenaltyMin += prefs.crowdPenaltyMin[load];
     totalWaitMin += waitMin;
     rides.push({
@@ -161,6 +173,7 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
       waitMin,
       load,
       alreadyAboard: false,
+      rideTimeSource: useLive ? "live" : "estimated",
     });
     cursorReadyMs = alightMs;
     if (!firstRideSeen) {

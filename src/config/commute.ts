@@ -19,9 +19,17 @@ import type { Plan } from "@/lib/engine/types";
 //
 //  ⚠️ PLACEHOLDERS BELOW — replace before going live:
 //    • All "00000" codes → real 5-digit LTA bus stop codes (the number on the
-//      bus-stop pole; also shown in Google Maps under the stop name).
+//      bus-stop pole; also shown in Google Maps under the stop name). REQUIRED.
 //    • "???" service → the third bus you change to in the "stay on 21" route.
-//    • All `minutes` / `rideMinutes` → tune to what you actually experience.
+//
+//  About `rideMinutes`: this is now only a FALLBACK. When a real LTA key is set,
+//  the engine derives each bus's in-vehicle time LIVE by GPS-matching the bus
+//  across its board + alight stops (see src/lib/engine/ridetime.ts), so traffic
+//  is accounted for automatically. The configured value is used only when a bus
+//  is schedule-based (no GPS) or can't be matched — so rough numbers are fine.
+//
+//  Transfers involve no walking (you wait at the same stop), so the only walk
+//  legs are office → first stop and final stop → home.
 //
 //  The engine reads only this file + preferences.ts; no logic changes needed.
 // ============================================================================

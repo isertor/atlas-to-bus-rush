@@ -17,6 +17,7 @@ export interface RideView {
   waitMin: number;
   load: LoadCode;
   alreadyAboard: boolean;
+  rideTimeSource: "live" | "estimated";
 }
 
 export interface PlanOption {
@@ -70,6 +71,7 @@ function toView(est: PlanEstimate, plan: Plan, score: number): PlanOption {
       waitMin: Math.round(r.waitMin),
       load: r.load,
       alreadyAboard: r.alreadyAboard,
+      rideTimeSource: r.rideTimeSource,
     })),
   };
 }
