@@ -1,3 +1,4 @@
+import { PLANS } from "@/config/commute";
 import type { BusArrival } from "@/lib/engine/types";
 import { MIN } from "@/lib/time";
 import { parseLoad } from "./load";
@@ -64,11 +65,22 @@ function toArrival(nb: LtaNextBus | undefined): BusArrival | null {
 
 const LOADS = ["SEA", "SDA", "LSD"] as const;
 
+/** All ride services referenced anywhere in the configured plans. */
+function configuredServices(): string[] {
+  const set = new Set<string>();
+  for (const plan of PLANS) {
+    for (const leg of plan.legs) {
+      if (leg.kind === "ride") set.add(leg.service);
+    }
+  }
+  return [...set];
+}
+
 function mockStopArrivals(stopCode: string): Record<string, BusArrival[]> {
   const now = Date.now();
   const seed = [...stopCode].reduce((s, c) => s + c.charCodeAt(0), 0);
-  // Every service we might ask about across the placeholder config:
-  const services = ["26", "21", "23"];
+  // Cover whatever services the live config uses, so the demo always connects:
+  const services = configuredServices();
   // NOTE: real LTA returns only the next ~3 buses per service. We emit a longer
   // horizon here purely so the demo shows feasible multi-leg connections in all
   // views; the engine handles the sparse real-world case via its feasibility check.
