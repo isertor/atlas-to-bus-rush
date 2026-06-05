@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "comment": "Slack 'time to leave' nudge — fires weekdays ~17:15 SGT (09:15 UTC). Adjust to taste. Requires SLACK_WEBHOOK_URL + CRON_SECRET set in Vercel.",
+      "path": "/api/notify",
+      "schedule": "15 9 * * 1-5"
+    }
+  ]
+}
