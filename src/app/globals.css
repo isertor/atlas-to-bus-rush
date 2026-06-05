@@ -128,6 +128,19 @@ body {
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
+.suggested {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(79, 140, 255, 0.14);
+  padding: 2px 7px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
 .card .top {
   display: flex;
   align-items: flex-start;

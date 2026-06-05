@@ -107,7 +107,7 @@ function BoardView({ data, now }: { data: RecommendResult | null; now: number })
 
 function OptionsView({ data, now, mode }: { data: RecommendResult | null; now: number; mode: Mode }) {
   if (!data?.options) return null;
-  const title = mode === "leave-now" ? "If you leave now" : "Switch early vs stay on 26";
+  const title = mode === "leave-now" ? "If you leave now" : "Switch to 26 vs stay on 21 — you decide";
   return (
     <div className="stack">
       <div className="section-title">{title}</div>

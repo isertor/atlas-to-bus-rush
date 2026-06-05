@@ -72,13 +72,29 @@ describe("evaluatePlan", () => {
     expect(est.reason).toContain("21");
   });
 
-  it("packed buses raise the perceived arrival above the real arrival", () => {
+  it("crowding is display-only: load does not change the perceived arrival/score", () => {
+    const seats = idx({
+      [arrivalKey("00001", "26")]: [{ atMin: 8, load: "SEA" }],
+      [arrivalKey("00002", "21")]: [{ atMin: 20, load: "SEA" }],
+    });
     const packed = idx({
       [arrivalKey("00001", "26")]: [{ atMin: 8, load: "LSD" }],
       [arrivalKey("00002", "21")]: [{ atMin: 20, load: "LSD" }],
     });
-    const est = evaluatePlan(PLAN, packed, { now: NOW, prefs: PREFERENCES });
-    expect(est.perceivedArriveMs).toBeGreaterThan(est.arriveHomeMs as number);
+    const a = evaluatePlan(PLAN, seats, { now: NOW, prefs: PREFERENCES });
+    const b = evaluatePlan(PLAN, packed, { now: NOW, prefs: PREFERENCES });
+    // Same timings → same perceived arrival regardless of how packed the buses are.
+    expect(b.perceivedArriveMs).toBe(a.perceivedArriveMs);
+    // ...but the load is still reported per ride for the UI to display.
+    expect(b.rides[0].load).toBe("LSD");
+  });
+
+  it("waiting dominates the perceived arrival (wait is penalised heavily)", () => {
+    const est = evaluatePlan(PLAN, arrivals, { now: NOW, prefs: PREFERENCES });
+    // perceived = arrival + waitPenalty * wait, with no crowd component
+    const expected =
+      (est.arriveHomeMs as number) + est.totalWaitMin * PREFERENCES.waitPenaltyPerMin * MIN;
+    expect(est.perceivedArriveMs).toBe(expected);
   });
 
   it("uses live GPS-matched alight time over the configured rideMinutes when available", () => {

@@ -29,6 +29,7 @@ export function PlanCard({ option, now, recommended, emphasis = "leave" }: Props
     <div className={`card${recommended ? " recommended" : ""}`}>
       <div className="top">
         <div>
+          {recommended && <span className="suggested">Suggested</span>}
           <div className="label">{option.label}</div>
           {option.description && <div className="desc">{option.description}</div>}
         </div>
