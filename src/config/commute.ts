@@ -41,10 +41,13 @@ export const DEPARTURE_WINDOW = { earliest: "17:30", latest: "18:30" };
 
 // --- Stops (PLACEHOLDER codes — replace with real LTA bus stop codes) -------
 
-const OFFICE_STOP = { code: "00000", name: "Office stop (board 21)" };
-const TRANSFER_STOP = { code: "00000", name: "Transfer stop (21 → 26)" };
-const HOME_STOP = { code: "00000", name: "Home stop (26 alights)" };
-const FAR_STOP = { code: "00000", name: "Far stop (stay-on-21 change)" };
+const OFFICE_STOP = { code: "50349", name: "Office stop (board 21)" };
+const TRANSFER_STOP = { code: "60059", name: "Transfer stop (21 → 26)" };
+const HOME_STOP = { code: "84581", name: "Home stop (26 alights)" };
+const FAR_STOP = { code: "82061", name: "Eunos Int (stay-on-21 change)" };
+// ⚠️ STILL PLACEHOLDER — need the onward service(s) you'd grab at Eunos Int and
+//    the stop they drop you at. Eunos is an interchange, so list one plan per
+//    service below (see "stay-21-A" / "stay-21-B").
 const DROP_A = { code: "00000", name: "Drop stop A" };
 const DROP_B = { code: "00000", name: "Drop stop B" };
 
@@ -73,8 +76,8 @@ const STAY_ON_21_TO_FAR = {
   kind: "ride" as const,
   service: "21",
   board: TRANSFER_STOP,
-  alight: FAR_STOP,
-  rideMinutes: 20, // PLACEHOLDER typical — tune to your real ~20 min ride
+  alight: FAR_STOP, // Eunos Int (82061)
+  rideMinutes: 20, // typical ~20 min ride; refined live against Eunos 21 ETAs
   stops: 13,
   alreadyAboard: true,
 };
