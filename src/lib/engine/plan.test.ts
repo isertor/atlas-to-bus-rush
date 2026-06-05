@@ -113,6 +113,34 @@ describe("evaluatePlan", () => {
     expect(ride21?.alightMs).toBe(NOW + 39 * MIN);
   });
 
+  it("an anyOf leg boards whichever candidate service arrives first", () => {
+    const anyOfPlan: Plan = {
+      id: "anyof",
+      label: "any",
+      legs: [
+        { kind: "walk", fromName: "Office", toName: "Stop 1", minutes: 5 },
+        {
+          kind: "ride",
+          service: "2", // label
+          anyOf: ["2", "24", "28"],
+          board: { code: "00001", name: "Eunos" },
+          alight: { code: "00009", name: "Chai Chee" },
+          rideMinutes: 8,
+        },
+        { kind: "walk", fromName: "Chai Chee", toName: "Home", minutes: 8 },
+      ],
+    };
+    const arr = idx({
+      [arrivalKey("00001", "2")]: [{ atMin: 20 }],
+      [arrivalKey("00001", "24")]: [{ atMin: 9 }], // soonest → should be chosen
+      [arrivalKey("00001", "28")]: [{ atMin: 14 }],
+    });
+    const est = evaluatePlan(anyOfPlan, arr, { now: NOW, prefs: PREFERENCES });
+    expect(est.feasible).toBe(true);
+    expect(est.rides[0].service).toBe("24");
+    expect(est.rides[0].boardMs).toBe(NOW + 9 * MIN);
+  });
+
   it("from the transfer (fromLegIndex), evaluates only the remaining journey", () => {
     const est = evaluatePlan(PLAN, arrivals, {
       now: NOW,

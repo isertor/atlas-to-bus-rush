@@ -29,8 +29,14 @@ export interface WalkLeg {
 /** A bus ride between two stops on a single service. */
 export interface RideLeg {
   kind: "ride";
-  /** Bus service number, e.g. "26". */
+  /** Bus service number, e.g. "26". For an `anyOf` leg, used only as a label. */
   service: string;
+  /**
+   * "Take the first bus that comes" — when set, the engine boards whichever of
+   * these services arrives soonest at `board` (they must share the same `alight`
+   * stop). E.g. at Eunos Int, any of 2/24/28/30/67/7 to Chai Chee.
+   */
+  anyOf?: string[];
   board: StopRef;
   alight: StopRef;
   /** Typical in-vehicle time board -> alight, in minutes (configured). */

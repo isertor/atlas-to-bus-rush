@@ -70,12 +70,15 @@ function toArrival(nb: LtaNextBus | undefined): BusArrival | null {
 
 const LOADS = ["SEA", "SDA", "LSD"] as const;
 
-/** All ride services referenced anywhere in the configured plans. */
+/** All ride services referenced anywhere in the configured plans (incl. anyOf). */
 function configuredServices(): string[] {
   const set = new Set<string>();
   for (const plan of PLANS) {
     for (const leg of plan.legs) {
-      if (leg.kind === "ride") set.add(leg.service);
+      if (leg.kind === "ride") {
+        set.add(leg.service);
+        for (const s of leg.anyOf ?? []) set.add(s);
+      }
     }
   }
   return [...set];

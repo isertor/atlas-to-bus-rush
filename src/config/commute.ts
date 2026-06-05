@@ -45,11 +45,10 @@ const OFFICE_STOP = { code: "50349", name: "Office stop (board 21)" };
 const TRANSFER_STOP = { code: "60059", name: "Transfer stop (21 → 26)" };
 const HOME_STOP = { code: "84581", name: "Home stop (26 alights)" };
 const FAR_STOP = { code: "82061", name: "Eunos Int (stay-on-21 change)" };
-// ⚠️ STILL PLACEHOLDER — need the onward service(s) you'd grab at Eunos Int and
-//    the stop they drop you at. Eunos is an interchange, so list one plan per
-//    service below (see "stay-21-A" / "stay-21-B").
-const DROP_A = { code: "00000", name: "Drop stop A" };
-const DROP_B = { code: "00000", name: "Drop stop B" };
+const CHAI_CHEE = { code: "84011", name: "Chai Chee Ind Park" };
+
+/** At Eunos Int, any of these to Chai Chee — you take whichever comes first. */
+const EUNOS_ONWARD_SERVICES = ["2", "24", "28", "30", "67", "7"];
 
 // --- Shared start: walk to the office stop, then ride 21 two stops -----------
 
@@ -103,29 +102,25 @@ export const PLANS: Plan[] = [
     ],
   },
   {
-    id: "stay-21-A",
-    label: "Stay on 21 → A",
-    description: "Stay seated on 21, grab service A at the far stop. Longer walk home.",
+    id: "stay-21-eunos",
+    label: "Stay on 21 → Eunos",
+    description:
+      "Stay seated on 21 to Eunos Int, then take the first of 2/24/28/30/67/7 to Chai Chee. Longer walk home.",
     decisionLegIndex: 2, // the continued "ride 21" leg (already aboard)
     legs: [
       WALK_OFFICE_TO_STOP,
       RIDE_21_FIRST_TWO_STOPS,
       STAY_ON_21_TO_FAR,
-      { kind: "ride", service: "A", board: FAR_STOP, alight: DROP_A, rideMinutes: 6, stops: 3 },
-      { kind: "walk", fromName: DROP_A.name, toName: DESTINATION_NAME, minutes: 8 }, // PLACEHOLDER
-    ],
-  },
-  {
-    id: "stay-21-B",
-    label: "Stay on 21 → B",
-    description: "Stay seated on 21, grab service B at the far stop. Different drop, different walk.",
-    decisionLegIndex: 2,
-    legs: [
-      WALK_OFFICE_TO_STOP,
-      RIDE_21_FIRST_TWO_STOPS,
-      STAY_ON_21_TO_FAR,
-      { kind: "ride", service: "B", board: FAR_STOP, alight: DROP_B, rideMinutes: 5, stops: 2 },
-      { kind: "walk", fromName: DROP_B.name, toName: DESTINATION_NAME, minutes: 11 }, // PLACEHOLDER
+      {
+        kind: "ride",
+        service: "2", // label; the engine picks whichever of anyOf comes first
+        anyOf: EUNOS_ONWARD_SERVICES,
+        board: FAR_STOP,
+        alight: CHAI_CHEE,
+        rideMinutes: 8, // fallback; refined live per chosen service
+        stops: 3,
+      },
+      { kind: "walk", fromName: CHAI_CHEE.name, toName: DESTINATION_NAME, minutes: 8 }, // ⚠️ PLACEHOLDER walk-home time
     ],
   },
 ];

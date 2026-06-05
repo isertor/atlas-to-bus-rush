@@ -73,10 +73,31 @@ function infeasible(planId: string, reason: string): PlanEstimate {
   };
 }
 
-/** Find the soonest arrival at/after `readyMs` for a service at a stop. */
-function nextArrival(arrivals: ArrivalIndex, stopCode: string, service: string, readyMs: number) {
-  const list = arrivals[arrivalKey(stopCode, service)] ?? [];
-  return list.find((a) => a.arrivalMs >= readyMs) ?? null;
+/** Candidate services for a ride leg: the `anyOf` set, or just `service`. */
+function legServices(ride: RideLeg): string[] {
+  return ride.anyOf && ride.anyOf.length > 0 ? ride.anyOf : [ride.service];
+}
+
+/**
+ * Find the soonest arrival at/after `readyMs` among one or more services at a
+ * stop — i.e. "take the first bus that comes". Returns the chosen service and
+ * its arrival, or null if none qualifies.
+ */
+function nextArrival(
+  arrivals: ArrivalIndex,
+  stopCode: string,
+  services: string[],
+  readyMs: number,
+): { service: string; bus: BusArrival } | null {
+  let best: { service: string; bus: BusArrival } | null = null;
+  for (const service of services) {
+    const list = arrivals[arrivalKey(stopCode, service)] ?? [];
+    const found = list.find((a) => a.arrivalMs >= readyMs);
+    if (found && (best === null || found.arrivalMs < best.bus.arrivalMs)) {
+      best = { service, bus: found };
+    }
+  }
+  return best;
 }
 
 /**
@@ -138,9 +159,11 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
     let load: LoadCode;
     let readyForRide: number;
     let boardBus: BusArrival | null;
+    let chosenService = ride.service;
 
     if (!firstRideSeen && ctx.anchorFirstBoardMs != null) {
       // Leave-by board: pin the first bus, back-calculate the office leave time.
+      // (The first ride is always a single service, never an `anyOf` leg.)
       boardMs = ctx.anchorFirstBoardMs;
       const list = arrivals[arrivalKey(ride.board.code, ride.service)] ?? [];
       boardBus = list.find((a) => a.arrivalMs === boardMs) ?? null;
@@ -150,18 +173,20 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
     } else {
       const buffer = firstRideSeen ? prefs.transferBufferMin : prefs.safetyBufferMin;
       readyForRide = cursorReadyMs + buffer * MIN;
-      const next = nextArrival(arrivals, ride.board.code, ride.service, readyForRide);
+      const services = legServices(ride);
+      const next = nextArrival(arrivals, ride.board.code, services, readyForRide);
       if (!next) {
-        return infeasible(plan.id, `No upcoming ${ride.service} at ${ride.board.name}`);
+        return infeasible(plan.id, `No upcoming ${services.join("/")} at ${ride.board.name}`);
       }
-      boardMs = next.arrivalMs;
-      boardBus = next;
-      load = next.load;
+      chosenService = next.service; // "take the first that comes" → which one it was
+      boardMs = next.bus.arrivalMs;
+      boardBus = next.bus;
+      load = next.bus.load;
       if (!firstRideSeen) leaveOfficeMs = now; // forward sim: you left now
     }
 
     // Live in-vehicle ride time: match the boarded bus at the alight stop by GPS.
-    const live = boardBus ? liveAlightMs(arrivals, ride.alight.code, ride.service, boardBus) : null;
+    const live = boardBus ? liveAlightMs(arrivals, ride.alight.code, chosenService, boardBus) : null;
     const useLive = live != null && live > boardMs;
     const alightMs = useLive ? (live as number) : boardMs + ride.rideMinutes * MIN;
 
@@ -169,7 +194,7 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
     crowdPenaltyMin += prefs.crowdPenaltyMin[load];
     totalWaitMin += waitMin;
     rides.push({
-      service: ride.service,
+      service: chosenService,
       board: ride.board,
       alight: ride.alight,
       boardMs,
