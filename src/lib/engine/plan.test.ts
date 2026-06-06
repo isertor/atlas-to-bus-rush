@@ -65,11 +65,15 @@ describe("evaluatePlan", () => {
     expect(est.firstBoardMs).toBe(NOW + 8 * MIN);
   });
 
-  it("is infeasible when a connecting service has no upcoming arrival", () => {
+  it("estimates (does not drop) a connection that isn't in the live window yet", () => {
     const noConn = idx({ [arrivalKey("00001", "26")]: [{ atMin: 8 }] });
     const est = evaluatePlan(PLAN, noConn, { now: NOW, prefs: PREFERENCES });
-    expect(est.feasible).toBe(false);
-    expect(est.reason).toContain("21");
+    // Route still feasible, but flagged estimated and the 21 leg's wait is a guess.
+    expect(est.feasible).toBe(true);
+    expect(est.estimated).toBe(true);
+    const ride21 = est.rides.find((r) => r.service === "21");
+    expect(ride21?.waitSource).toBe("estimated");
+    expect(est.arriveHomeMs).not.toBeNull();
   });
 
   it("crowding is display-only: load does not change the perceived arrival/score", () => {

@@ -26,6 +26,8 @@ export interface RecommendResult {
   options?: PlanOption[];
   /** Whether this run used mock data (no real LTA key / mock flag on). */
   mock: boolean;
+  /** True if one or more stop fetches failed (data is incomplete, not empty). */
+  partial: boolean;
 }
 
 /**
@@ -45,23 +47,35 @@ function stopsInPlans(plans: Plan[]): string[] {
   return [...set];
 }
 
-/** Fetch all needed stops and flatten into an ArrivalIndex keyed stop:service. */
-async function buildArrivalIndex(plans: Plan[]): Promise<ArrivalIndex> {
+/**
+ * Fetch all needed stops and flatten into an ArrivalIndex keyed stop:service.
+ * Per-stop failures are tolerated (that stop just has no arrivals) so one flaky
+ * request can't blank the whole app — `failures` reports how many failed.
+ */
+async function buildArrivalIndex(plans: Plan[]): Promise<{ index: ArrivalIndex; failures: number }> {
   const stops = stopsInPlans(plans);
   const index: ArrivalIndex = {};
+  let failures = 0;
   const results = await Promise.all(
-    stops.map(async (code) => ({ code, byService: await fetchStopArrivals(code) })),
+    stops.map(async (code) => {
+      try {
+        return { code, byService: await fetchStopArrivals(code) };
+      } catch {
+        failures++;
+        return { code, byService: {} as Record<string, never> };
+      }
+    }),
   );
   for (const { code, byService } of results) {
     for (const [service, arrivals] of Object.entries(byService)) {
       index[arrivalKey(code, service)] = arrivals;
     }
   }
-  return index;
+  return { index, failures };
 }
 
 export async function getRecommendation(mode: Mode, now = Date.now()): Promise<RecommendResult> {
-  const arrivals = await buildArrivalIndex(PLANS);
+  const { index: arrivals, failures } = await buildArrivalIndex(PLANS);
   const mock = process.env.USE_MOCK_LTA === "1" || !process.env.LTA_ACCOUNT_KEY;
 
   const board = buildLeaveByBoard(PLANS, arrivals, {
@@ -78,6 +92,7 @@ export async function getRecommendation(mode: Mode, now = Date.now()): Promise<R
     departureWindow: DEPARTURE_WINDOW,
     board,
     mock,
+    partial: failures > 0,
   };
 
   if (mode === "leave-now") {

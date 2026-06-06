@@ -32,6 +32,12 @@ export interface Preferences {
   waitPenaltyPerMin: number;
   /** Score (0–100) drops by this many points per perceived-minute worse than the best option. */
   scorePenaltyPerMin: number;
+  /**
+   * Assumed wait (minutes) for a connecting bus when it's too far out to be in
+   * LTA's live next-3 window yet. Lets us still estimate a later departure's
+   * journey instead of hiding it; such waits are flagged as estimated in the UI.
+   */
+  estWaitMin: number;
 }
 
 export const PREFERENCES: Preferences = {
@@ -45,4 +51,5 @@ export const PREFERENCES: Preferences = {
   },
   waitPenaltyPerMin: 1.5,
   scorePenaltyPerMin: 6,
+  estWaitMin: 6,
 };

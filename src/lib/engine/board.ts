@@ -18,6 +18,7 @@ export interface RideView {
   load: LoadCode;
   alreadyAboard: boolean;
   rideTimeSource: "live" | "estimated";
+  waitSource: "live" | "estimated";
 }
 
 export interface PlanOption {
@@ -33,6 +34,8 @@ export interface PlanOption {
   perceivedArriveMs: number | null;
   score: number;
   totalWaitMin: number;
+  /** True if any connection wait was estimated (not live yet). */
+  estimated: boolean;
   rides: RideView[];
 }
 
@@ -62,6 +65,7 @@ function toView(est: PlanEstimate, plan: Plan, score: number): PlanOption {
     perceivedArriveMs: est.perceivedArriveMs,
     score,
     totalWaitMin: est.totalWaitMin,
+    estimated: est.estimated,
     rides: est.rides.map((r) => ({
       service: r.service,
       boardName: r.board.name,
@@ -72,6 +76,7 @@ function toView(est: PlanEstimate, plan: Plan, score: number): PlanOption {
       load: r.load,
       alreadyAboard: r.alreadyAboard,
       rideTimeSource: r.rideTimeSource,
+      waitSource: r.waitSource,
     })),
   };
 }

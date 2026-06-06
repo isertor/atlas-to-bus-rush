@@ -1,15 +1,14 @@
 :root {
-  --bg: #f3ede1; /* cream */
-  --surf: #fffdf8; /* card */
-  --sunk: #ece5d6; /* inset */
-  --ink: #1c1b18; /* near-black text */
-  --steel: #6e6a62; /* secondary text */
-  --faint: #9c968a; /* tertiary text */
-  --accent: #6a4cd6; /* purple — the one accent */
-  --accent-soft: #ebe4fb; /* lavender fill */
-  --alert: #bf4d33; /* warm red — attention only */
-  --hair: rgba(28, 27, 24, 0.12);
-  --shadow: 0 1px 2px rgba(28, 27, 24, 0.05);
+  --bg: #f3f2ef; /* soft neutral off-white (not yellow) */
+  --surf: #ffffff; /* cards / panel */
+  --sunk: #efeeea; /* chips */
+  --ink: #1a1a1a; /* near-black text */
+  --steel: #6b6a67; /* secondary */
+  --faint: #9b9a96; /* tertiary */
+  --line: rgba(0, 0, 0, 0.09);
+  --accent: #6b4fd6; /* purple — used sparingly */
+  --accent-weak: rgba(107, 79, 214, 0.08);
+  --alert: #bb4a31; /* attention only */
   color-scheme: light;
 }
 
@@ -23,8 +22,9 @@
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
   display: flex;
   justify-content: center;
   min-height: 100vh;
@@ -33,249 +33,235 @@ body {
 .wrap {
   width: 100%;
   max-width: 420px;
-  padding: 24px 18px calc(36px + env(safe-area-inset-bottom));
+  padding: 28px 18px calc(40px + env(safe-area-inset-bottom));
   font-variant-numeric: tabular-nums;
   display: flex;
   flex-direction: column;
 }
 
+/* header */
 header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
 h1 {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 .clock {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--faint);
 }
 .sub {
   font-size: 13px;
   color: var(--steel);
-  margin: 6px 0 20px;
+  margin: 4px 0 22px;
 }
 
-/* boarding cards: which 21 */
-.buses {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 9px;
-  margin-bottom: 14px;
+/* tabs — which 21 */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
 }
-.bus {
-  border-radius: 16px;
-  padding: 14px 12px;
-  background: var(--surf);
-  border: 1px solid var(--hair);
-  box-shadow: var(--shadow);
-  cursor: pointer;
+.tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 8px 11px;
   text-align: left;
-  transition: background 0.15s, border-color 0.15s;
-  position: relative;
+  cursor: pointer;
   color: var(--ink);
   font-family: inherit;
+  transition: background 0.15s;
 }
-.bus .svc {
+.tab .when {
   font-size: 10px;
-  letter-spacing: 0.13em;
-  color: var(--faint);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+  color: var(--faint);
   font-weight: 600;
 }
-.bus .in {
-  font-size: 32px;
+.tab .num {
+  font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.03em;
-  line-height: 1.05;
-  margin: 6px 0 2px;
-  color: var(--ink);
+  line-height: 1.1;
+  margin: 5px 0 1px;
+  color: var(--steel);
 }
-.bus .in small {
-  font-size: 12px;
-  font-weight: 400;
+.tab .num small {
+  font-size: 11px;
+  font-weight: 500;
   color: var(--faint);
   margin-left: 2px;
 }
-.bus .at {
+.tab .at {
   font-size: 11px;
   color: var(--faint);
 }
-.bus .mini {
-  font-size: 11px;
-  color: var(--steel);
-  margin-top: 7px;
+.tab.sel {
+  background: var(--surf);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
-.bus.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
-.bus.active .in {
+.tab.sel .num {
   color: var(--accent);
-}
-.bus.active::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -15px;
-  transform: translateX(-50%) rotate(45deg);
-  width: 10px;
-  height: 10px;
-  background: var(--accent-soft);
-  border-right: 1px solid var(--accent);
-  border-bottom: 1px solid var(--accent);
 }
 
 /* panel */
 .panel {
   background: var(--surf);
-  border: 1px solid var(--accent);
-  border-radius: 18px;
-  padding: 18px;
-  box-shadow: var(--shadow);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 .leave {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--hair);
-  margin-bottom: 16px;
+  gap: 12px;
 }
-.leave .a {
-  font-size: 15px;
-}
-.leave .a b {
+.leave .big {
+  font-size: 20px;
   font-weight: 600;
-  font-size: 17px;
+  letter-spacing: -0.02em;
 }
-.leave .walk {
-  font-size: 11px;
+.leave .by {
+  font-size: 12px;
   color: var(--faint);
   text-align: right;
-  line-height: 1.5;
+  white-space: nowrap;
+}
+.rule {
+  height: 1px;
+  background: var(--line);
+  margin: 16px 0 4px;
 }
 
-.cmp-k {
-  font-size: 10.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--faint);
-  font-weight: 600;
-  margin-bottom: 10px;
-}
-
-/* a route line */
+/* a route option */
 .route {
-  background: var(--sunk);
-  border: 1px solid transparent;
-  border-radius: 14px;
-  padding: 12px 14px;
+  border-left: 2px solid transparent;
+  padding: 14px 0 14px 12px;
 }
 .route + .route {
-  margin-top: 9px;
+  border-top: 1px solid var(--line);
 }
 .route.best {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-left-color: var(--accent);
 }
-.route-top {
+.rhead {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 10px;
 }
-.route-name {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--steel);
+.rname {
+  font-size: 14px;
+  font-weight: 600;
 }
-.route.best .route-name {
+.route.best .rname {
   color: var(--accent);
 }
-.route-home {
-  font-size: 19px;
+.rhome {
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
-.route-home .crowd {
+.rhome .crowd {
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--faint);
-  margin-left: 5px;
+  margin-left: 6px;
+  font-style: normal;
 }
-.route-home .crowd.bad {
+.rhome .crowd.bad {
   color: var(--alert);
 }
 
-/* the path diagram */
-.path {
+/* diagram */
+.diagram {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 11px;
+  margin-top: 12px;
 }
-.link {
-  flex: 1;
-  min-width: 8px;
-  height: 0;
-  border-top: 1.5px dotted var(--faint);
-  opacity: 0.7;
-}
-.chip {
+.dnode {
   flex: none;
-  background: var(--surf);
-  border: 1px solid var(--hair);
-  border-radius: 8px;
-  padding: 3px 8px;
+}
+.dnode.bus {
+  background: var(--sunk);
+  border-radius: 6px;
+  padding: 3px 7px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
-.way {
-  flex: none;
+.dnode.stop,
+.dnode.home {
   font-size: 11px;
   color: var(--steel);
 }
-.walk {
-  flex: none;
-  font-size: 14px;
+.dconn {
+  flex: 1;
+  min-width: 22px;
+  position: relative;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.wait {
-  flex: none;
-  font-size: 12px;
-  font-weight: 700;
+.dconn::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1.5px solid var(--line);
 }
-.wait.ok {
-  color: var(--steel);
+.dconn.walk::before {
+  border-top-style: dotted;
 }
-.wait.warn {
+.dconn .lbl {
+  position: relative;
+  background: var(--surf);
+  padding: 0 6px;
+  font-size: 10px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.dconn.wait .lbl {
+  color: var(--accent);
+  font-weight: 600;
+}
+.dconn.wait.long .lbl {
   color: var(--alert);
 }
-.home-pin {
-  flex: none;
-  font-size: 14px;
+.dconn.est .lbl {
+  color: var(--faint);
+  font-weight: 500;
 }
 
+/* states */
 .footer {
   margin-top: auto;
-  padding-top: 26px;
+  padding-top: 30px;
   text-align: center;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
 }
-.empty {
+.note {
   text-align: center;
   color: var(--steel);
   padding: 70px 0;
-  font-size: 16px;
+  font-size: 15px;
 }
 .spinner {
   margin: 90px auto;
-  width: 26px;
-  height: 26px;
-  border: 3px solid var(--sunk);
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid var(--sunk);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;

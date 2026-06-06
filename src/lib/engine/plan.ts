@@ -22,6 +22,8 @@ export interface ResolvedRide {
   alreadyAboard: boolean;
   /** Whether alight time came from live GPS matching or the configured estimate. */
   rideTimeSource: "live" | "estimated";
+  /** Whether the wait before this ride is from live arrivals or an estimate. */
+  waitSource: "live" | "estimated";
 }
 
 export interface PlanEstimate {
@@ -38,6 +40,8 @@ export interface PlanEstimate {
   perceivedArriveMs: number | null;
   totalWaitMin: number;
   crowdPenaltyMin: number;
+  /** True if any connection wait had to be estimated (not live in LTA's window). */
+  estimated: boolean;
   rides: ResolvedRide[];
 }
 
@@ -69,6 +73,7 @@ function infeasible(planId: string, reason: string): PlanEstimate {
     perceivedArriveMs: null,
     totalWaitMin: 0,
     crowdPenaltyMin: 0,
+    estimated: false,
     rides: [],
   };
 }
@@ -116,6 +121,7 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
   let firstRideSeen = false;
   let crowdPenaltyMin = 0;
   let totalWaitMin = 0;
+  let estimated = false;
   const rides: ResolvedRide[] = [];
 
   for (const leg of legs) {
@@ -145,6 +151,7 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
         load: "UNKNOWN", // live load of the bus you're on isn't in the next-bus feed
         alreadyAboard: true,
         rideTimeSource: refined != null ? "live" : "estimated",
+        waitSource: "live", // you're aboard — there is no wait here
       });
       cursorReadyMs = alightMs;
       if (!firstRideSeen) {
@@ -160,6 +167,7 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
     let readyForRide: number;
     let boardBus: BusArrival | null;
     let chosenService = ride.service;
+    let waitSource: "live" | "estimated" = "live";
 
     if (!firstRideSeen && ctx.anchorFirstBoardMs != null) {
       // Leave-by board: pin the first bus, back-calculate the office leave time.
@@ -175,13 +183,21 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
       readyForRide = cursorReadyMs + buffer * MIN;
       const services = legServices(ride);
       const next = nextArrival(arrivals, ride.board.code, services, readyForRide);
-      if (!next) {
-        return infeasible(plan.id, `No upcoming ${services.join("/")} at ${ride.board.name}`);
+      if (next) {
+        chosenService = next.service; // "take the first that comes" → which one it was
+        boardMs = next.bus.arrivalMs;
+        boardBus = next.bus;
+        load = next.bus.load;
+      } else {
+        // The connecting bus isn't in LTA's live next-3 window yet (it's still
+        // too far out). Don't drop the whole route — estimate the wait so the
+        // option still shows, flagged as estimated.
+        boardMs = readyForRide + prefs.estWaitMin * MIN;
+        boardBus = null;
+        load = "UNKNOWN";
+        waitSource = "estimated";
+        estimated = true;
       }
-      chosenService = next.service; // "take the first that comes" → which one it was
-      boardMs = next.bus.arrivalMs;
-      boardBus = next.bus;
-      load = next.bus.load;
       if (!firstRideSeen) leaveOfficeMs = now; // forward sim: you left now
     }
 
@@ -203,6 +219,7 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
       load,
       alreadyAboard: false,
       rideTimeSource: useLive ? "live" : "estimated",
+      waitSource,
     });
     cursorReadyMs = alightMs;
     if (!firstRideSeen) {
@@ -228,6 +245,7 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
     perceivedArriveMs,
     totalWaitMin: Math.round(totalWaitMin),
     crowdPenaltyMin,
+    estimated,
     rides,
   };
 }
