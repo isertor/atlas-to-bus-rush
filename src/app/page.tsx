@@ -39,7 +39,10 @@ export default function Page() {
     <main className="wrap">
       <header>
         <h1>Heading home</h1>
-        <span className="clock">{error ? "reconnecting…" : data?.mock ? "demo" : "live"}</span>
+        <span className={`live${error ? " off" : ""}`}>
+          <span className="dot" />
+          {error ? "reconnecting" : data?.mock ? "demo" : "live"}
+        </span>
       </header>
       <div className="sub">Bus 21 from your office stop</div>
 
@@ -86,9 +89,12 @@ function Panel({ row, now }: { row: LeaveByRow; now: number }) {
   const leaveMin = leave != null ? minutesFromNow(leave, now) : null;
   const toStop = leave != null ? Math.max(1, Math.round((row.firstBoardMs - leave) / 60_000)) : null;
 
-  const perfect = row.options.find((o) => o.planId === "perfect");
-  const stay = row.options.find((o) => o.planId.startsWith("stay"));
   const bestId = row.options[0]?.planId;
+  // Show the recommended route first and dominant, the other one quieter below.
+  const ordered = [
+    row.options.find((o) => o.planId === bestId),
+    row.options.find((o) => o.planId !== bestId),
+  ].filter((o): o is PlanOption => o != null);
 
   return (
     <div className="panel">
@@ -97,13 +103,14 @@ function Panel({ row, now }: { row: LeaveByRow; now: number }) {
         {leave != null && (
           <div className="by">
             by {fmtClock(leave)}
-            {toStop != null ? ` · ${toStop} min to stop` : ""}
+            {toStop != null ? ` · ${toStop} min walk` : ""}
           </div>
         )}
       </div>
       <div className="rule" />
-      {perfect && <Route opt={perfect} best={bestId === perfect.planId} />}
-      {stay && <Route opt={stay} best={bestId === stay.planId} />}
+      {ordered.map((opt) => (
+        <Route key={opt.planId} opt={opt} best={opt.planId === bestId} />
+      ))}
     </div>
   );
 }
@@ -154,12 +161,13 @@ function Route({ opt, best }: { opt: PlanOption; best: boolean }) {
 
   return (
     <div className={`route${best ? " best" : ""}`}>
-      <div className="rhead">
-        <span className="rname">{strategyName(opt)}</span>
-        <span className="rhome">
-          {home}
-          {crowd && <span className={`crowd${crowd.bad ? " bad" : ""}`}>{crowd.word}</span>}
-        </span>
+      <div className="rlabel">
+        {strategyName(opt)}
+        {best && <span className="tagbest">BEST</span>}
+      </div>
+      <div className="rhome">
+        <span className="t">{home}</span>
+        {crowd && <span className={`crowd${crowd.bad ? " bad" : ""}`}>{crowd.word}</span>}
       </div>
       <div className="diagram">
         {nodes.map((n, i) => (
