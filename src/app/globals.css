@@ -1,14 +1,15 @@
 :root {
-  --bg: #f3f2ef; /* soft neutral off-white (not yellow) */
-  --surf: #ffffff; /* cards / panel */
-  --sunk: #efeeea; /* chips */
-  --ink: #1a1a1a; /* near-black text */
-  --steel: #6b6a67; /* secondary */
-  --faint: #9b9a96; /* tertiary */
-  --line: rgba(0, 0, 0, 0.09);
-  --accent: #6b4fd6; /* purple — used sparingly */
-  --accent-weak: rgba(107, 79, 214, 0.08);
-  --alert: #bb4a31; /* attention only */
+  --bg: #f3f2ef; /* soft neutral off-white */
+  --surf: #ffffff;
+  --sunk: #efeeea;
+  --ink: #1a1a1a;
+  --steel: #6b6a67;
+  --faint: #9b9a96;
+  --line: rgba(0, 0, 0, 0.08);
+  --accent: #6b4fd6; /* purple — single accent, used sparingly */
+  --accent-weak: rgba(107, 79, 214, 0.06);
+  --alert: #bb4a31;
+  --font: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
 }
 
@@ -22,9 +23,9 @@
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font);
   -webkit-font-smoothing: antialiased;
-  letter-spacing: -0.01em;
+  text-rendering: optimizeLegibility;
   display: flex;
   justify-content: center;
   min-height: 100vh;
@@ -33,7 +34,7 @@ body {
 .wrap {
   width: 100%;
   max-width: 420px;
-  padding: 28px 18px calc(40px + env(safe-area-inset-bottom));
+  padding: 32px 20px calc(40px + env(safe-area-inset-bottom));
   font-variant-numeric: tabular-nums;
   display: flex;
   flex-direction: column;
@@ -46,32 +47,44 @@ header {
   align-items: baseline;
 }
 h1 {
-  font-size: 26px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 600;
   letter-spacing: -0.03em;
 }
-.clock {
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
   color: var(--faint);
 }
+.live .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.live.off .dot {
+  background: var(--faint);
+}
 .sub {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--steel);
-  margin: 4px 0 22px;
+  margin: 4px 0 28px;
 }
 
 /* tabs — which 21 */
 .tabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 .tab {
   flex: 1;
   background: transparent;
   border: none;
   border-radius: 14px;
-  padding: 12px 8px 11px;
+  padding: 14px 10px 13px;
   text-align: left;
   cursor: pointer;
   color: var(--ink);
@@ -80,27 +93,28 @@ h1 {
 }
 .tab .when {
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--faint);
   font-weight: 600;
 }
 .tab .num {
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 600;
   letter-spacing: -0.03em;
-  line-height: 1.1;
-  margin: 5px 0 1px;
+  line-height: 1.08;
+  margin: 6px 0 2px;
   color: var(--steel);
 }
 .tab .num small {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--faint);
-  margin-left: 2px;
+  margin-left: 3px;
+  letter-spacing: 0;
 }
 .tab .at {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--faint);
 }
 .tab.sel {
@@ -114,69 +128,83 @@ h1 {
 /* panel */
 .panel {
   background: var(--surf);
-  border-radius: 20px;
-  padding: 20px;
+  border-radius: 22px;
+  padding: 24px 22px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
-.leave {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-}
+
+/* leave hero */
 .leave .big {
-  font-size: 20px;
+  font-size: 30px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
 }
 .leave .by {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
-  text-align: right;
-  white-space: nowrap;
+  margin-top: 6px;
 }
 .rule {
   height: 1px;
   background: var(--line);
-  margin: 16px 0 4px;
+  margin: 22px 0 4px;
 }
 
-/* a route option */
+/* route options */
 .route {
-  border-left: 2px solid transparent;
-  padding: 14px 0 14px 12px;
-}
-.route + .route {
-  border-top: 1px solid var(--line);
+  padding: 18px 0 4px;
 }
 .route.best {
-  border-left-color: var(--accent);
+  background: var(--accent-weak);
+  border-radius: 16px;
+  padding: 16px;
+  margin-top: 14px;
 }
-.rhead {
+.route + .route {
+  margin-top: 6px;
+}
+.rlabel {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-}
-.rname {
-  font-size: 14px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   font-weight: 600;
+  color: var(--steel);
 }
-.route.best .rname {
+.route.best .rlabel {
   color: var(--accent);
 }
+.tagbest {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 5px;
+  padding: 2px 6px;
+}
 .rhome {
-  font-size: 17px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 6px;
+}
+.rhome .t {
   font-weight: 600;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
+  letter-spacing: -0.02em;
+}
+.route.best .rhome .t {
+  font-size: 30px;
+}
+.route .rhome .t {
+  font-size: 22px;
 }
 .rhome .crowd {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  color: var(--faint);
-  margin-left: 6px;
-  font-style: normal;
+  color: var(--steel);
 }
 .rhome .crowd.bad {
   color: var(--alert);
@@ -186,28 +214,42 @@ h1 {
 .diagram {
   display: flex;
   align-items: center;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 .dnode {
   flex: none;
 }
 .dnode.bus {
-  background: var(--sunk);
-  border-radius: 6px;
-  padding: 3px 7px;
+  background: var(--surf);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 3px 8px;
   font-size: 13px;
   font-weight: 600;
+}
+.route.best .dnode.bus {
+  background: #fff;
 }
 .dnode.stop,
 .dnode.home {
   font-size: 11px;
   color: var(--steel);
 }
+.dnode.home::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--steel);
+  margin-right: 5px;
+  vertical-align: middle;
+}
 .dconn {
   flex: 1;
-  min-width: 22px;
+  min-width: 20px;
   position: relative;
-  height: 22px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -231,6 +273,9 @@ h1 {
   color: var(--faint);
   white-space: nowrap;
 }
+.route.best .dconn .lbl {
+  background: #f6f4fd; /* matches accent-weak tint so the line "breaks" cleanly */
+}
 .dconn.wait .lbl {
   color: var(--accent);
   font-weight: 600;
@@ -246,7 +291,7 @@ h1 {
 /* states */
 .footer {
   margin-top: auto;
-  padding-top: 30px;
+  padding-top: 32px;
   text-align: center;
   font-size: 11px;
   color: var(--faint);
@@ -254,11 +299,11 @@ h1 {
 .note {
   text-align: center;
   color: var(--steel);
-  padding: 70px 0;
+  padding: 80px 0;
   font-size: 15px;
 }
 .spinner {
-  margin: 90px auto;
+  margin: 100px auto;
   width: 24px;
   height: 24px;
   border: 2.5px solid var(--sunk);
