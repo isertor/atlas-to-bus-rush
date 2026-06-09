@@ -9,6 +9,13 @@
   --accent: #6b4fd6; /* purple — single accent, used sparingly */
   --accent-weak: rgba(107, 79, 214, 0.06);
   --alert: #bb4a31;
+  /* load tones — green seats, amber standing, red packed (LTA pattern) */
+  --good: #3a8a4f;
+  --good-bg: rgba(58, 138, 79, 0.1);
+  --warn: #b07d1e;
+  --warn-bg: rgba(176, 125, 30, 0.12);
+  --bad: #c0392b;
+  --bad-bg: rgba(192, 57, 43, 0.12);
   --font: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
 }
@@ -70,72 +77,77 @@ h1 {
 .sub {
   font-size: 14px;
   color: var(--steel);
-  margin: 4px 0 28px;
+  margin: 4px 0 24px;
 }
 
-/* tabs — which 21 */
-.tabs {
+/* departure rail — the upcoming first buses */
+.railwrap {
+  margin-bottom: 18px;
+}
+.raillabel {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 600;
+  margin: 0 4px 8px;
+}
+.rail {
   display: flex;
   gap: 8px;
-  margin-bottom: 20px;
 }
-.tab {
+.chip {
   flex: 1;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 14px;
-  padding: 14px 10px 13px;
+  padding: 11px 12px 12px;
   text-align: left;
   cursor: pointer;
   color: var(--ink);
   font-family: inherit;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
-.tab .when {
-  font-size: 10px;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: var(--faint);
-  font-weight: 600;
-}
-.tab .num {
-  font-size: 30px;
+.chip .eta {
+  font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.03em;
-  line-height: 1.08;
-  margin: 6px 0 2px;
+  line-height: 1.05;
+  margin: 5px 0 3px;
   color: var(--steel);
 }
-.tab .num small {
+.chip .eta small {
   font-size: 12px;
   font-weight: 500;
   color: var(--faint);
   margin-left: 3px;
   letter-spacing: 0;
 }
-.tab .at {
-  font-size: 12px;
+.chip .home {
+  font-size: 11px;
   color: var(--faint);
 }
-.tab.sel {
+.chip.sel {
   background: var(--surf);
+  border-color: var(--line);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
-.tab.sel .num {
+.chip.sel .eta {
   color: var(--accent);
 }
-
-/* panel */
-.panel {
-  background: var(--surf);
-  border-radius: 22px;
-  padding: 24px 22px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+.chip.sel .home {
+  color: var(--steel);
 }
 
-/* leave hero */
+/* detail */
+.detail {
+  background: var(--surf);
+  border-radius: 22px;
+  padding: 22px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
 .leave .big {
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1.05;
@@ -145,39 +157,42 @@ h1 {
   color: var(--faint);
   margin-top: 6px;
 }
-.rule {
-  height: 1px;
-  background: var(--line);
-  margin: 22px 0 4px;
-}
 
-/* route options */
-.route {
-  padding: 18px 0 4px;
-}
-.route.best {
-  background: var(--accent-weak);
-  border-radius: 16px;
-  padding: 16px;
-  margin-top: 14px;
-}
-.route + .route {
-  margin-top: 6px;
-}
-.rlabel {
+/* options — both always shown */
+.options {
+  margin-top: 18px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+}
+.opt {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px 14px 16px;
+}
+.opt.best {
+  border-color: rgba(107, 79, 214, 0.35);
+  background: var(--accent-weak);
+}
+.ohead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+}
+.oname {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--steel);
+  white-space: nowrap;
 }
-.route.best .rlabel {
+.opt.best .oname {
   color: var(--accent);
 }
-.tagbest {
+.badge {
   font-size: 9px;
   letter-spacing: 0.08em;
   background: var(--accent);
@@ -185,76 +200,149 @@ h1 {
   border-radius: 5px;
   padding: 2px 6px;
 }
-.rhome {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 6px;
+.oarr {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
 }
-.rhome .t {
+.oarr .t {
+  font-size: 24px;
   font-weight: 600;
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
-.route.best .rhome .t {
-  font-size: 30px;
-}
-.route .rhome .t {
-  font-size: 22px;
-}
-.rhome .crowd {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--steel);
-}
-.rhome .crowd.bad {
-  color: var(--alert);
+.opt.best .oarr .t {
+  font-size: 28px;
 }
 
-/* diagram */
-.diagram {
+/* timeline */
+.timeline {
   display: flex;
-  align-items: center;
-  margin-top: 14px;
+  align-items: flex-start;
+  margin-top: 8px;
+  padding-top: 24px; /* room for the floating wait pill above connecting buses */
 }
-.dnode {
+.node {
   flex: none;
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
 }
-.dnode.bus {
+.node.home {
+  padding-top: 7px; /* drop the home dot to the line level */
+}
+
+/* bus node — number + deck icon, tinted by crowd load */
+.node.bus .bnum {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: var(--surf);
   border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 3px 8px;
-  font-size: 13px;
+  border-radius: 8px;
+  padding: 4px 8px 4px 6px;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1;
 }
-.route.best .dnode.bus {
+.opt.best .node.bus .bnum {
   background: #fff;
 }
-.dnode.stop,
-.dnode.home {
+.node.bus .deck {
+  display: block;
+}
+.node.bus .deck rect:first-of-type {
+  fill: var(--steel);
+}
+.node.bus .deck .win {
+  fill: #fff;
+}
+.node.bus .deck .wheel {
+  fill: var(--steel);
+}
+.node.bus .beta {
   font-size: 11px;
+  font-weight: 600;
   color: var(--steel);
 }
-.dnode.home::before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
+/* transfer wait, floating just above the bus it's for (keeps it off the line
+ * and away from the ETA below, so the two minute values don't clash) */
+.node.bus .bwait {
+  position: absolute;
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-weak);
+  border-radius: 6px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.node.bus .bwait.long {
+  color: var(--alert);
+  background: rgba(187, 74, 49, 0.08);
+}
+.node.bus .bwait.est {
+  color: var(--faint);
+  background: transparent;
+  font-weight: 500;
+}
+/* load tints (LTA "red when crowded" pattern) */
+.node.bus.load-good .bnum {
+  border-color: rgba(58, 138, 79, 0.4);
+  background: var(--good-bg);
+}
+.node.bus.load-good .deck rect:first-of-type,
+.node.bus.load-good .deck .wheel {
+  fill: var(--good);
+}
+.node.bus.load-warn .bnum {
+  border-color: rgba(176, 125, 30, 0.45);
+  background: var(--warn-bg);
+}
+.node.bus.load-warn .deck rect:first-of-type,
+.node.bus.load-warn .deck .wheel {
+  fill: var(--warn);
+}
+.node.bus.load-bad .bnum {
+  border-color: rgba(192, 57, 43, 0.5);
+  background: var(--bad-bg);
+}
+.node.bus.load-bad .deck rect:first-of-type,
+.node.bus.load-bad .deck .wheel {
+  fill: var(--bad);
+}
+.node.bus.load-bad .beta {
+  color: var(--bad);
+}
+
+/* home node */
+.node.home .hmark {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--steel);
-  margin-right: 5px;
-  vertical-align: middle;
+  background: var(--accent);
 }
-.dconn {
-  flex: 1;
-  min-width: 20px;
+.node.home .hlabel {
+  font-size: 10px;
+  color: var(--steel);
+}
+
+/* connectors — flex-grow set inline, proportional to ride time */
+.conn {
+  flex: 0 1 0;
+  min-width: 18px;
+  align-self: flex-start;
+  margin-top: 13px; /* align line to the bus-number row */
   position: relative;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  height: 2px;
 }
-.dconn::before {
+.conn::before {
   content: "";
   position: absolute;
   left: 0;
@@ -262,40 +350,11 @@ h1 {
   top: 50%;
   border-top: 1.5px solid var(--line);
 }
-.dconn.walk::before {
+.conn.walk::before {
   border-top-style: dotted;
-}
-.dconn .lbl {
-  position: relative;
-  background: var(--surf);
-  padding: 0 6px;
-  font-size: 10px;
-  color: var(--faint);
-  white-space: nowrap;
-}
-.route.best .dconn .lbl {
-  background: #f6f4fd; /* matches accent-weak tint so the line "breaks" cleanly */
-}
-.dconn.wait .lbl {
-  color: var(--accent);
-  font-weight: 600;
-}
-.dconn.wait.long .lbl {
-  color: var(--alert);
-}
-.dconn.est .lbl {
-  color: var(--faint);
-  font-weight: 500;
 }
 
 /* states */
-.footer {
-  margin-top: auto;
-  padding-top: 32px;
-  text-align: center;
-  font-size: 11px;
-  color: var(--faint);
-}
 .note {
   text-align: center;
   color: var(--steel);

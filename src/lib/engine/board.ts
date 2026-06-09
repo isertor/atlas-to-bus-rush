@@ -16,6 +16,8 @@ export interface RideView {
   alightMs: number;
   waitMin: number;
   load: LoadCode;
+  /** Vehicle deck type: "SD" single, "DD" double, "BD" bendy. Undefined if unknown. */
+  type?: string;
   alreadyAboard: boolean;
   rideTimeSource: "live" | "estimated";
   waitSource: "live" | "estimated";
@@ -74,6 +76,7 @@ function toView(est: PlanEstimate, plan: Plan, score: number): PlanOption {
       alightMs: r.alightMs,
       waitMin: Math.round(r.waitMin),
       load: r.load,
+      type: r.type,
       alreadyAboard: r.alreadyAboard,
       rideTimeSource: r.rideTimeSource,
       waitSource: r.waitSource,

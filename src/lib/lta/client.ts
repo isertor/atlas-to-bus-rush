@@ -92,11 +92,18 @@ function mockStopArrivals(stopCode: string): Record<string, BusArrival[]> {
   // NOTE: real LTA returns only the next ~3 buses per service. We emit a longer
   // horizon here purely so the demo shows feasible multi-leg connections in all
   // views; the engine handles the sparse real-world case via its feasibility check.
+  // Headway by route role, so the demo mirrors reality: the first bus (21) is
+  // frequent, the connecting trunk route (26) is sparser, onward feeders medium.
+  // Sparse connectors are what create the "two early 21s catch the SAME 26 →
+  // identical home time" insight the app is built to surface.
+  const headway = (svc: string) => (svc === "21" ? 5 : svc === "26" ? 13 : 8);
+
   const out: Record<string, BusArrival[]> = {};
   services.forEach((svc, i) => {
-    const base = ((seed + i * 3 + svc.charCodeAt(0)) % 5) + 1; // 1..5 min to first bus
+    const base = ((seed + i * 3 + svc.charCodeAt(0)) % 4) + 1; // 1..4 min to first bus
+    const hw = headway(svc);
     out[svc] = [0, 1, 2, 3, 4, 5].map((n) => {
-      const offsetMin = base + n * (6 + ((seed + n) % 4)); // ~6–9 min headways
+      const offsetMin = base + n * hw;
       const loadIdx = (seed + i + n) % LOADS.length;
       return {
         arrivalMs: now + offsetMin * MIN,

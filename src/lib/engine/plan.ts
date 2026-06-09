@@ -19,6 +19,8 @@ export interface ResolvedRide {
   alightMs: number;
   waitMin: number;
   load: LoadCode;
+  /** Vehicle deck type: "SD" single, "DD" double, "BD" bendy. Undefined if unknown. */
+  type?: string;
   alreadyAboard: boolean;
   /** Whether alight time came from live GPS matching or the configured estimate. */
   rideTimeSource: "live" | "estimated";
@@ -149,6 +151,7 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
         alightMs,
         waitMin: 0,
         load: "UNKNOWN", // live load of the bus you're on isn't in the next-bus feed
+        type: undefined, // can't identify the specific vehicle you're aboard
         alreadyAboard: true,
         rideTimeSource: refined != null ? "live" : "estimated",
         waitSource: "live", // you're aboard — there is no wait here
@@ -217,6 +220,7 @@ export function evaluatePlan(plan: Plan, arrivals: ArrivalIndex, ctx: EvalContex
       alightMs,
       waitMin,
       load,
+      type: boardBus?.type,
       alreadyAboard: false,
       rideTimeSource: useLive ? "live" : "estimated",
       waitSource,
