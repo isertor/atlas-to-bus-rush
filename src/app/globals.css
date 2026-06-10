@@ -500,54 +500,7 @@ h1 {
   }
 }
 
-/* journey mode */
-.mybus {
-  background: var(--surf);
-  border-radius: 22px;
-  padding: 18px 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  margin-bottom: 12px;
-}
-.mybus .big {
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-}
-.mybus .by {
-  font-size: 13px;
-  color: var(--faint);
-  margin-top: 5px;
-}
-/* journey option cards sit on the page background, so give them a surface */
-.wrap > .options .opt {
-  background: var(--surf);
-}
-.wrap > .options .opt.best {
-  background: var(--accent-weak);
-}
-.connect {
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: 10px;
-  padding: 8px 11px;
-}
-.connect b {
-  font-weight: 600;
-}
-.connect.ok {
-  color: var(--good);
-  background: var(--good-bg);
-}
-.connect.tight {
-  color: var(--bad);
-  background: var(--bad-bg);
-}
-.connect.long {
-  color: var(--warn);
-  background: var(--warn-bg);
-}
+/* journey mode — stage-advance actions inside the option cards */
 .acts {
   display: flex;
   flex-wrap: wrap;
@@ -571,32 +524,23 @@ h1 {
   border-color: var(--accent);
 }
 
-/* boarding entry point on the planning screen */
+/* boarding entry point on the planning screen — quiet, card-like */
 .boardbtn {
-  margin-top: 16px;
+  margin-top: 14px;
   width: 100%;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  color: #fff;
-  background: var(--accent);
-  border: none;
-  border-radius: 14px;
+  color: var(--accent);
+  background: var(--surf);
+  border: 1px solid var(--line);
+  border-radius: 16px;
   padding: 14px 16px;
   cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 .boardbtn:active {
-  opacity: 0.85;
-}
-.boardhint {
-  margin-top: 8px;
-  text-align: center;
-  font-size: 11px;
-  color: var(--faint);
-}
-.osub {
-  font-size: 10px;
-  color: var(--faint);
+  background: var(--accent-weak);
 }
 
 /* states */

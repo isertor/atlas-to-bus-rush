@@ -231,7 +231,6 @@ function PlanScreen({ onBoard }: { onBoard: () => void }) {
           <button className="boardbtn" onClick={onBoard}>
             I just boarded the {FIRST_SERVICE} →
           </button>
-          <div className="boardhint">Tracking follows your bus, so your options stay live after it leaves.</div>
         </>
       )}
     </main>
@@ -239,8 +238,10 @@ function PlanScreen({ onBoard }: { onBoard: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
-//  Journey screen — map on top, your bus's next stop, live stay-vs-switch
-//  options with connection margins, and the stage-advance actions.
+//  Journey screen — the SAME card language as the planning screen, anchored to
+//  your bus: the map sits where the rail was, "next stop in N min" replaces
+//  "Leave in N min", and the two options keep their timelines — the connection
+//  margin is the familiar "wait 1m" pill on the connecting bus.
 // ---------------------------------------------------------------------------
 
 function JourneyScreen({ journey, setJourney }: { journey: Journey; setJourney: (j: Journey | null) => void }) {
@@ -277,11 +278,12 @@ function JourneyScreen({ journey, setJourney }: { journey: Journey; setJourney: 
   const now = data?.now ?? Date.now();
   const service = data?.service ?? journey.service ?? FIRST_SERVICE;
   const etaMin = data ? Math.max(0, minutesFromNow(data.myEtaMs, now)) : null;
+  const ordered = data ? [...data.options].sort((a, b) => routeRank(a.planId) - routeRank(b.planId)) : [];
 
   return (
     <main className="wrap">
       <header>
-        <h1>On the {service}</h1>
+        <h1>Heading home</h1>
         <span className="hbtns">
           <button className="endbtn" onClick={() => setJourney(null)}>
             End trip
@@ -292,9 +294,7 @@ function JourneyScreen({ journey, setJourney }: { journey: Journey; setJourney: 
           </span>
         </span>
       </header>
-      <div className="sub">
-        {data ? `Next: ${data.alightName}` : "Locating your bus…"}
-      </div>
+      <div className="sub">{data ? `On the ${service} → ${data.alightName}` : `On the ${service}`}</div>
 
       <div className="mapcard tall">
         <JourneyMap
@@ -310,81 +310,71 @@ function JourneyScreen({ journey, setJourney }: { journey: Journey; setJourney: 
       {!data ? (
         <div className="spinner" />
       ) : (
-        <>
-          <div className="mybus">
-            <div className="big">
-              {etaMin === 0 ? `Arriving at ${data.alightName}` : `${data.alightName} in ${etaMin} min`}
-            </div>
+        <div className="detail">
+          <div className="leave">
+            <div className="big">{etaMin === 0 ? "Arriving now" : `Next stop in ${etaMin} min`}</div>
             <div className="by">
-              {data.myEtaSource === "estimated" ? "~" : ""}
+              {data.alightName} · {data.myEtaSource === "estimated" ? "~" : ""}
               {fmtClock(data.myEtaMs)}
-              {data.myEtaSource === "estimated" ? " · estimated from typical ride time" : " · matched to live ETAs"}
             </div>
           </div>
-
           <div className="options">
-            {data.options.map((opt) => (
-              <TrackCard key={opt.planId} opt={opt} journey={journey} track={data} setJourney={setJourney} />
+            {ordered.map((opt) => (
+              <JourneyOption key={opt.planId} opt={opt} journey={journey} track={data} now={now} setJourney={setJourney} />
             ))}
           </div>
-        </>
+        </div>
       )}
     </main>
   );
 }
 
-/** One live option while aboard: connection margin, home time, advance action. */
-function TrackCard({
+/** A planning-screen option card kept alive while aboard, plus its advance action. */
+function JourneyOption({
   opt,
   journey,
   track,
+  now,
   setJourney,
 }: {
   opt: TrackOption;
   journey: Journey;
   track: TrackResponse;
+  now: number;
   setJourney: (j: Journey | null) => void;
 }) {
   const plan = PLANS.find((p) => p.id === opt.planId);
   if (!plan) return null;
   // BEST only matters while there's still a choice to make.
-  const showBest = opt.best && journey.planId == null;
+  const best = opt.best && journey.planId == null;
+  const { nodes, conns } = buildJourney(opt, now);
+  const home = nodes[nodes.length - 1] as HomeNode;
 
   const idx = nextRideIndex(plan, journey.legIndex);
   const leg = idx !== -1 ? (plan.legs[idx] as RideLeg) : null;
-  const connect = opt.rides.find((r) => !r.alreadyAboard) ?? null;
 
   return (
-    <div className={`opt${showBest ? " best" : ""}`}>
+    <div className={`opt${best ? " best" : ""}`}>
       <div className="ohead">
         <span className="oname">
           {strategyName(opt.planId)}
-          {showBest && <span className="badge">BEST</span>}
+          {best && <span className="badge">BEST</span>}
         </span>
         <span className="oarr">
-          <span className="t">
-            {opt.arriveHomeMs != null ? `${opt.estimated ? "~" : ""}${fmtClock(opt.arriveHomeMs)}` : "—"}
-          </span>
-          <span className="osub">home</span>
+          <span className="t">{home.clock}</span>
         </span>
       </div>
-
-      {connect && opt.connectMin != null ? (
-        <div className={`connect ${connectTone(opt.connectMin)}`}>
-          <b>{connect.service}</b> at {connect.boardName.toLowerCase()}{" "}
-          {opt.connectSource === "estimated" ? "~" : ""}
-          {opt.connectMin <= 0 ? "as you arrive" : `${opt.connectMin} min after you`}
-          {opt.connectMin <= 1 && opt.connectSource === "live" ? " — tight" : ""}
-        </div>
-      ) : (
-        <div className="connect ok">ride to the end, then walk home</div>
-      )}
-
-      {!opt.feasible && <div className="connect long">{opt.reason ?? "No live data for this option"}</div>}
-
-      {leg && (
-        <div className="acts">
-          {leg.alreadyAboard ? (
+      <div className="timeline">
+        {nodes.map((n, i) => (
+          <Fragment key={i}>
+            {i > 0 && <Conn c={conns[i - 1]} />}
+            <Node n={n} />
+          </Fragment>
+        ))}
+      </div>
+      <div className="acts">
+        {leg ? (
+          leg.alreadyAboard ? (
             <button
               className="act"
               onClick={() => setJourney({ planId: plan.id, legIndex: idx, boardedMs: track.myEtaMs })}
@@ -401,24 +391,15 @@ function TrackCard({
                 I&rsquo;m on the {s}
               </button>
             ))
-          )}
-        </div>
-      )}
-      {!leg && (
-        <div className="acts">
+          )
+        ) : (
           <button className="act done" onClick={() => setJourney(null)}>
             I&rsquo;m home — end trip
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
-}
-
-function connectTone(min: number): string {
-  if (min <= 1) return "tight";
-  if (min > 10) return "long";
-  return "ok";
 }
 
 /** Top rail: the upcoming bus-21 departures, each showing when it reaches your
@@ -453,14 +434,7 @@ function Detail({ row, now }: { row: LeaveByRow; now: number }) {
 
   // `options` is ranked best-first, so the top one is the recommendation.
   const bestId = row.options[0]?.planId;
-  // Keep the routes in a FIXED order (Change to 26 on top, Stay on 21 below) so
-  // they don't swap places between refreshes — we just move the highlight.
-  const ROUTE_ORDER = ["perfect", "stay-21-eunos"];
-  const rank = (id: string) => {
-    const i = ROUTE_ORDER.indexOf(id);
-    return i === -1 ? ROUTE_ORDER.length : i;
-  };
-  const ordered = [...row.options].sort((a, b) => rank(a.planId) - rank(b.planId));
+  const ordered = [...row.options].sort((a, b) => routeRank(a.planId) - routeRank(b.planId));
 
   return (
     <div className="detail">
@@ -479,6 +453,14 @@ function Detail({ row, now }: { row: LeaveByRow; now: number }) {
 
 function strategyName(planId: string): string {
   return planId === "perfect" ? "Change to 26" : "Stay on 21";
+}
+
+// Keep the routes in a FIXED order (Change to 26 on top, Stay on 21 below) so
+// they don't swap places between refreshes — we just move the highlight.
+const ROUTE_ORDER = ["perfect", "stay-21-eunos"];
+function routeRank(planId: string): number {
+  const i = ROUTE_ORDER.indexOf(planId);
+  return i === -1 ? ROUTE_ORDER.length : i;
 }
 
 const LOAD_CLASS: Record<LoadCode, string> = {
@@ -501,6 +483,8 @@ type BusNode = {
   /** Transfer wait before boarding this bus (connecting buses only). */
   waitMin?: number;
   waitEst?: boolean;
+  /** Journey mode: the bus you're sitting on right now. */
+  riding?: boolean;
 };
 type HomeNode = { kind: "home"; clock: string };
 type JNode = BusNode | HomeNode;
@@ -522,24 +506,32 @@ function busNode(r: RideView, now: number, withWait: boolean): BusNode {
   };
 }
 
-function buildJourney(opt: PlanOption, now: number): { nodes: JNode[]; conns: JConn[] } {
+/** What the timeline needs from an option — PlanOption and TrackOption both fit. */
+type JourneyLike = Pick<PlanOption, "rides" | "arriveHomeMs" | "estimated">;
+
+function buildJourney(opt: JourneyLike, now: number): { nodes: JNode[]; conns: JConn[] } {
   // Show only the buses you actively board: the first bus, then each connecting
   // bus (with its transfer wait attached). "Stay seated" legs are implicit — no
-  // intermediate stop node, no "stay on" label.
+  // intermediate stop node, no "stay on" label. In journey mode the first ride
+  // is the bus you're ALREADY on; it leads the timeline as a "riding" node
+  // (any stay-seated continuation legs still collapse into it).
+  const aboard = opt.rides[0]?.alreadyAboard ? opt.rides[0] : null;
   const boarded = opt.rides.filter((r) => !r.alreadyAboard);
   const nodes: JNode[] = [];
   const conns: JConn[] = [];
+  if (aboard) nodes.push({ ...busNode(aboard, now, false), riding: true });
   boarded.forEach((r, i) => {
-    if (i > 0) {
+    if (nodes.length > 0) {
       // In-vehicle time from boarding the previous bus to boarding this one
       // (= the elapsed gap minus the transfer wait, which is drawn on the node).
-      const spanMs = r.boardMs - boarded[i - 1].boardMs - (r.waitMin ?? 0) * MIN_MS;
+      const prevBoardMs = i > 0 ? boarded[i - 1].boardMs : (aboard as RideView).boardMs;
+      const spanMs = r.boardMs - prevBoardMs - (r.waitMin ?? 0) * MIN_MS;
       conns.push({ kind: "ride", grow: Math.max(spanMs, MIN_MS) / MIN_MS });
     }
-    nodes.push(busNode(r, now, i > 0));
+    nodes.push(busNode(r, now, i > 0 || aboard != null));
   });
   // Last leg: ride of the final bus + the walk home (no wait after boarding it).
-  const last = boarded[boarded.length - 1];
+  const last = boarded[boarded.length - 1] ?? (aboard as RideView);
   const homeMs = opt.arriveHomeMs ?? last.boardMs;
   conns.push({ kind: "walk", grow: Math.max(homeMs - last.boardMs, MIN_MS) / MIN_MS });
   nodes.push({
@@ -587,7 +579,7 @@ function Node({ n }: { n: JNode }) {
           <DeckIcon type={n.type} />
           {n.service}
         </span>
-        <span className="beta">{n.etaMin === 0 ? "now" : `${n.etaMin}m`}</span>
+        <span className="beta">{n.riding ? "riding" : n.etaMin === 0 ? "now" : `${n.etaMin}m`}</span>
       </span>
     );
   }
