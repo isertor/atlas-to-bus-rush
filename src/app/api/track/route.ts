@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { PLANS } from "@/config/commute";
+import { ALL_PLANS, DIRECTIONS, parseDirectionId } from "@/config/commute";
 import { PREFERENCES } from "@/config/preferences";
 import { trackJourney, type JourneyState, type TrackResult } from "@/lib/engine/track";
 import { getStopCoords } from "@/lib/lta/stops";
-import { buildMapData, type MapData } from "@/lib/map";
-import { buildArrivalIndex, stopsInPlans } from "@/lib/recommend";
+import { buildMapData, stopsInPlans, type MapData } from "@/lib/map";
+import { buildArrivalIndex } from "@/lib/recommend";
 
 // Journey-mode endpoint: "I'm ON the bus — keep my options alive."
 //
-//   GET /api/track?legIndex=1&boardedMs=...[&planId=...][&service=...]
+//   GET /api/track?dir=to-home&legIndex=1&boardedMs=...[&planId=...][&service=...]
 //
 // Everything is anchored to the boarded bus (legIndex + boardedMs), not the
 // origin stop, so options no longer vanish once the bus departs. Returns the
@@ -32,6 +32,7 @@ export async function GET(req: Request) {
   if (!Number.isInteger(legIndex) || legIndex < 0 || !Number.isFinite(boardedMs)) {
     return NextResponse.json({ error: "legIndex and boardedMs are required" }, { status: 400 });
   }
+  const commute = DIRECTIONS[parseDirectionId(params.get("dir"))];
   const state: JourneyState = {
     planId: params.get("planId"),
     legIndex,
@@ -42,10 +43,12 @@ export async function GET(req: Request) {
   try {
     const now = Date.now();
     const [{ index: arrivals, failures }, coords] = await Promise.all([
-      buildArrivalIndex(PLANS),
-      getStopCoords(stopsInPlans(PLANS)).catch(() => ({})),
+      buildArrivalIndex(commute.plans),
+      // Coords for BOTH directions so the mock layout stays canonical; live
+      // LTA lookups are cached for a day anyway.
+      getStopCoords(stopsInPlans(ALL_PLANS)).catch(() => ({})),
     ]);
-    const result = trackJourney(PLANS, arrivals, { now, prefs: PREFERENCES, state });
+    const result = trackJourney(commute.plans, arrivals, { now, prefs: PREFERENCES, state });
     if (!result) {
       return NextResponse.json({ error: "No plan matches that journey position" }, { status: 400 });
     }
@@ -54,7 +57,7 @@ export async function GET(req: Request) {
       now,
       mock: process.env.USE_MOCK_LTA === "1" || !process.env.LTA_ACCOUNT_KEY,
       partial: failures > 0,
-      map: buildMapData(PLANS, arrivals, coords),
+      map: buildMapData(commute.plans, arrivals, coords),
     };
     return NextResponse.json(body);
   } catch (err) {

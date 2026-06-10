@@ -1,7 +1,10 @@
 # 🚌 Bus Rush — Atlas → Home commute optimizer
 
 A phone-first web app that calls Singapore LTA's free **Bus Arrival API** and answers the
-three questions you actually care about on the evening commute:
+three questions you actually care about on the commute — in **both directions** (the
+subtitle line is a one-tap direction toggle; it defaults to office-bound before noon SGT,
+homeward after). Both directions share the same decision shape: a trunk bus, then
+"change early" vs "stay seated and change later". For the evening run:
 
 1. **When do I leave the office?** — a live "leave-by" board across your usual window.
 2. **Switch early or stay on?** — once you're on bus 26 at the transfer stop, should you
@@ -103,16 +106,15 @@ Other scripts: `npm test` (engine unit tests), `npm run typecheck`, `npm run bui
 
 ### Plugging in your real commute
 
-Edit **`src/config/commute.ts`** only. Replace the placeholder `STOP_*` codes with real
-5-digit LTA bus stop codes, the `service` numbers with your buses, and tune the `minutes` /
-`rideMinutes` to match reality. Notes:
+Edit **`src/config/commute.ts`** only — it defines both directions (`TO_HOME`, `TO_OFFICE`)
+as plain data. Tune the `minutes` / `rideMinutes` marked ⚠️ to match reality. Notes:
 
-- The **first ride leg of every plan is assumed to be the same bus at the same stop** (your 26
-  from stop 1). The leave-by board is built from that shared first ride.
-- Each plan's `decisionLegIndex` marks where it diverges (the transfer decision point); the
-  "On the bus" view evaluates from there.
-- For the "stay on 26" plan, the continued 26 leg is flagged `alreadyAboard: true` so the engine
-  knows you don't wait/board for it.
+- The **first ride leg of every plan within a direction must be IDENTICAL** (same service,
+  board AND alight stop). The leave-by board and journey mode are built from that shared
+  first ride — `src/config/commute.test.ts` fails CI if an edit breaks this.
+- Each plan's `decisionLegIndex` marks where it diverges (the transfer decision point).
+- A "stay seated past the shared alight" continuation is its own ride leg flagged
+  `alreadyAboard: true` (e.g. evening 21 → Eunos, morning 26 → transfer 1).
 
 ---
 

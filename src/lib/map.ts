@@ -31,6 +31,16 @@ export interface MapData {
   buses: MapBus[];
 }
 
+/**
+ * Every distinct stop code referenced by the given plans — both board AND
+ * alight stops — in journey order. The canonical ordering matters: mock
+ * coordinates are laid out by position in this list, so every caller (stop
+ * markers, mock bus positions) must derive it from the same plans.
+ */
+export function stopsInPlans(plans: Plan[]): string[] {
+  return stopRefs(plans).map((s) => s.code);
+}
+
 /** Every ride service a plan references (incl. anyOf alternatives). */
 function servicesInPlans(plans: Plan[]): Set<string> {
   const set = new Set<string>();

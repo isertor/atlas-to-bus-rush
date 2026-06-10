@@ -1,6 +1,7 @@
-import { DEPARTURE_WINDOW, DESTINATION_NAME, ORIGIN_NAME, PLANS } from "@/config/commute";
+import type { CommuteDirection } from "@/config/commute";
 import { PREFERENCES } from "@/config/preferences";
 import { fetchStopArrivals } from "@/lib/lta/client";
+import { stopsInPlans } from "@/lib/map";
 import { withinWindow } from "@/lib/time";
 import {
   buildLeaveByBoard,
@@ -16,6 +17,8 @@ export type Mode = "board" | "leave-now" | "at-transfer";
 export interface RecommendResult {
   origin: string;
   destination: string;
+  /** Which commute direction this is for. */
+  direction: CommuteDirection["id"];
   now: number;
   mode: Mode;
   /** The user's usual departure window (informational; used to annotate the board). */
@@ -28,23 +31,6 @@ export interface RecommendResult {
   mock: boolean;
   /** True if one or more stop fetches failed (data is incomplete, not empty). */
   partial: boolean;
-}
-
-/**
- * Every distinct stop code referenced by the configured plans — both board AND
- * alight stops, so we can derive live ride times by matching a bus across them.
- */
-function stopsInPlans(plans: Plan[]): string[] {
-  const set = new Set<string>();
-  for (const plan of plans) {
-    for (const leg of plan.legs) {
-      if (leg.kind === "ride") {
-        set.add(leg.board.code);
-        set.add(leg.alight.code);
-      }
-    }
-  }
-  return [...set];
 }
 
 /**
@@ -74,31 +60,36 @@ async function buildArrivalIndex(plans: Plan[]): Promise<{ index: ArrivalIndex; 
   return { index, failures };
 }
 
-export async function getRecommendation(mode: Mode, now = Date.now()): Promise<RecommendResult> {
-  const { index: arrivals, failures } = await buildArrivalIndex(PLANS);
+export async function getRecommendation(
+  mode: Mode,
+  commute: CommuteDirection,
+  now = Date.now(),
+): Promise<RecommendResult> {
+  const { index: arrivals, failures } = await buildArrivalIndex(commute.plans);
   const mock = process.env.USE_MOCK_LTA === "1" || !process.env.LTA_ACCOUNT_KEY;
 
-  const board = buildLeaveByBoard(PLANS, arrivals, {
+  const board = buildLeaveByBoard(commute.plans, arrivals, {
     now,
     prefs: PREFERENCES,
-    isWithinWindow: (ms) => withinWindow(ms, DEPARTURE_WINDOW, now),
+    isWithinWindow: (ms) => withinWindow(ms, commute.departureWindow, now),
   });
 
   const result: RecommendResult = {
-    origin: ORIGIN_NAME,
-    destination: DESTINATION_NAME,
+    origin: commute.origin,
+    destination: commute.destination,
+    direction: commute.id,
     now,
     mode,
-    departureWindow: DEPARTURE_WINDOW,
+    departureWindow: commute.departureWindow,
     board,
     mock,
     partial: failures > 0,
   };
 
   if (mode === "leave-now") {
-    result.options = decideLeaveNow(PLANS, arrivals, { now, prefs: PREFERENCES });
+    result.options = decideLeaveNow(commute.plans, arrivals, { now, prefs: PREFERENCES });
   } else if (mode === "at-transfer") {
-    result.options = decideAtTransfer(PLANS, arrivals, { now, prefs: PREFERENCES });
+    result.options = decideAtTransfer(commute.plans, arrivals, { now, prefs: PREFERENCES });
   }
 
   return result;

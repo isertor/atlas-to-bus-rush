@@ -79,6 +79,20 @@ h1 {
   color: var(--steel);
   margin: 4px 0 24px;
 }
+/* the subtitle doubles as the direction toggle on the planning screen */
+button.dirflip {
+  font-family: inherit;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  display: block;
+}
+.dirflip .swap {
+  color: var(--accent);
+  font-weight: 600;
+  margin-left: 3px;
+}
 
 /* departure rail — the upcoming first buses */
 .railwrap {

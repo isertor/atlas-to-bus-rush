@@ -57,6 +57,8 @@ export interface Plan {
   id: string;
   /** Short label for cards, e.g. "Perfect: 26 → 21". */
   label: string;
+  /** Even shorter strategy name for option headers, e.g. "Change to 26". */
+  strategy?: string;
   /** Optional longer explanation. */
   description?: string;
   legs: Leg[];

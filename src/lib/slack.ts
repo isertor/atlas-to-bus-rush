@@ -1,3 +1,4 @@
+import { TO_HOME } from "@/config/commute";
 import { fmtClock } from "@/lib/time";
 import { getRecommendation } from "@/lib/recommend";
 
@@ -8,9 +9,10 @@ import { getRecommendation } from "@/lib/recommend";
 // (see vercel.json) a little before your usual departure. With no webhook set,
 // this logs the message instead of sending, so it's safe to wire up early.
 
-/** Build a short, phone-glanceable nudge from the current leave-by board. */
+/** Build a short, phone-glanceable nudge from the current leave-by board.
+ * The cron fires before the EVENING window, so this is always homeward. */
 export async function buildLeaveByNudge(now = Date.now()): Promise<string | null> {
-  const rec = await getRecommendation("board", now);
+  const rec = await getRecommendation("board", TO_HOME, now);
   const top = rec.board[0];
   if (!top || top.leaveOfficeMs == null) return null;
 
