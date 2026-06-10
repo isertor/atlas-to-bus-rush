@@ -14,6 +14,15 @@ export function fmtClock(ms: number): string {
   }).format(new Date(ms));
 }
 
+/** Hour of day (0–23) in Singapore for an epoch-ms timestamp. */
+export function sgHour(ms: number): number {
+  return Number(
+    new Intl.DateTimeFormat("en-GB", { timeZone: SG_TZ, hour: "2-digit", hour12: false }).format(
+      new Date(ms),
+    ),
+  );
+}
+
 /** Whole minutes from `now` to `ms`, rounded. Negative means in the past. */
 export function minutesFromNow(ms: number, now: number): number {
   return Math.round((ms - now) / MIN);

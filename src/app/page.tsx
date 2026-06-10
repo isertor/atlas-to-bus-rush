@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { PLANS } from "@/config/commute";
+import { DIRECTIONS, defaultDirectionId, type CommuteDirection, type DirectionId } from "@/config/commute";
 import type { UserPos } from "@/components/JourneyMap";
 import type { MapResponse } from "@/app/api/map/route";
 import type { TrackResponse } from "@/app/api/track/route";
@@ -26,13 +26,14 @@ const JourneyMap = dynamic(() => import("@/components/JourneyMap"), { ssr: false
 // ---------------------------------------------------------------------------
 
 interface Journey {
+  dir: DirectionId; // a journey is pinned to its direction
   planId: string | null; // null while still deciding on the shared trunk
   legIndex: number;
   boardedMs: number;
   service?: string; // actual boarded service on an anyOf leg
 }
 
-const JOURNEY_KEY = "bus-rush-journey-v1";
+const JOURNEY_KEY = "bus-rush-journey-v2";
 const JOURNEY_TTL_MS = 3 * 60 * 60 * 1000; // a commute is over well within 3h
 
 function loadJourney(): Journey | null {
@@ -41,8 +42,8 @@ function loadJourney(): Journey | null {
     if (!raw) return null;
     const { journey, at } = JSON.parse(raw) as { journey: Journey; at: number };
     if (Date.now() - at > JOURNEY_TTL_MS) return null;
-    const leg = PLANS[0]?.legs[journey.legIndex];
-    if (!leg) return null; // config changed since it was saved
+    const commute = DIRECTIONS[journey.dir];
+    if (!commute?.plans[0]?.legs[journey.legIndex]) return null; // config changed since saved
     return journey;
   } catch {
     return null;
@@ -58,8 +59,18 @@ function saveJourney(journey: Journey | null) {
   }
 }
 
-const FIRST_RIDE_INDEX = Math.max(0, PLANS[0].legs.findIndex((l) => l.kind === "ride"));
-const FIRST_SERVICE = (PLANS[0].legs[FIRST_RIDE_INDEX] as RideLeg).service;
+function firstRideIndex(commute: CommuteDirection): number {
+  return Math.max(0, commute.plans[0].legs.findIndex((l) => l.kind === "ride"));
+}
+
+function firstService(commute: CommuteDirection): string {
+  return (commute.plans[0].legs[firstRideIndex(commute)] as RideLeg).service;
+}
+
+/** Short label for the destination end of the journey ("home" / "office"). */
+function destLabel(commute: CommuteDirection): string {
+  return commute.id === "to-home" ? "home" : "office";
+}
 
 /** Index of the next ride leg after `after`, or -1. */
 function nextRideIndex(plan: Plan, after: number): number {
@@ -70,8 +81,8 @@ function nextRideIndex(plan: Plan, after: number): number {
 }
 
 /** Services of the next FRESH boarding (skipping stay-seated legs) for map highlighting. */
-function watchServicesFor(journey: Journey): string[] {
-  const plans = journey.planId ? PLANS.filter((p) => p.id === journey.planId) : PLANS;
+function watchServicesFor(commute: CommuteDirection, journey: Journey): string[] {
+  const plans = journey.planId ? commute.plans.filter((p) => p.id === journey.planId) : commute.plans;
   const set = new Set<string>();
   for (const plan of plans) {
     let i = nextRideIndex(plan, journey.legIndex);
@@ -104,16 +115,22 @@ function useGeo(active: boolean): UserPos | null {
 
 export default function Page() {
   const [journey, setJourneyState] = useState<Journey | null>(null);
+  // Direction defaults by SG time of day (mornings → office); one tap flips it.
+  // An active journey carries its own direction and isn't affected by the flip.
+  const [dir, setDir] = useState<DirectionId>("to-home");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setJourneyState(loadJourney());
+    const j = loadJourney();
+    setJourneyState(j);
+    setDir(j?.dir ?? defaultDirectionId());
     setHydrated(true);
   }, []);
 
   const setJourney = useCallback((j: Journey | null) => {
     saveJourney(j);
     setJourneyState(j);
+    if (j) setDir(j.dir);
   }, []);
 
   if (!hydrated) {
@@ -124,10 +141,19 @@ export default function Page() {
     );
   }
 
-  return journey ? (
-    <JourneyScreen journey={journey} setJourney={setJourney} />
-  ) : (
-    <PlanScreen onBoard={() => setJourney({ planId: null, legIndex: FIRST_RIDE_INDEX, boardedMs: Date.now() })} />
+  if (journey) {
+    return <JourneyScreen commute={DIRECTIONS[journey.dir]} journey={journey} setJourney={setJourney} />;
+  }
+  const commute = DIRECTIONS[dir];
+  return (
+    <PlanScreen
+      key={dir} // full reset (selection, map, data) when the direction flips
+      commute={commute}
+      onFlip={() => setDir(dir === "to-home" ? "to-office" : "to-home")}
+      onBoard={() =>
+        setJourney({ dir, planId: null, legIndex: firstRideIndex(commute), boardedMs: Date.now() })
+      }
+    />
   );
 }
 
@@ -136,7 +162,15 @@ export default function Page() {
 //  + the "I just boarded" entry point into journey mode.
 // ---------------------------------------------------------------------------
 
-function PlanScreen({ onBoard }: { onBoard: () => void }) {
+function PlanScreen({
+  commute,
+  onFlip,
+  onBoard,
+}: {
+  commute: CommuteDirection;
+  onFlip: () => void;
+  onBoard: () => void;
+}) {
   const [data, setData] = useState<RecommendResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -144,11 +178,12 @@ function PlanScreen({ onBoard }: { onBoard: () => void }) {
   const [mapOpen, setMapOpen] = useState(false);
   const [mapData, setMapData] = useState<MapResponse | null>(null);
   const user = useGeo(mapOpen);
+  const trunk = firstService(commute);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/recommend?mode=board`, { cache: "no-store" });
+      const res = await fetch(`/api/recommend?mode=board&dir=${commute.id}`, { cache: "no-store" });
       if (!res.ok) throw new Error();
       setData(await res.json());
       setError(false);
@@ -157,7 +192,7 @@ function PlanScreen({ onBoard }: { onBoard: () => void }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [commute.id]);
 
   useEffect(() => {
     load();
@@ -171,7 +206,7 @@ function PlanScreen({ onBoard }: { onBoard: () => void }) {
     let alive = true;
     const loadMap = async () => {
       try {
-        const res = await fetch(`/api/map`, { cache: "no-store" });
+        const res = await fetch(`/api/map?dir=${commute.id}`, { cache: "no-store" });
         if (res.ok && alive) setMapData(await res.json());
       } catch {
         // keep last map
@@ -183,7 +218,7 @@ function PlanScreen({ onBoard }: { onBoard: () => void }) {
       alive = false;
       clearInterval(id);
     };
-  }, [mapOpen]);
+  }, [mapOpen, commute.id]);
 
   const now = data?.now ?? Date.now();
   const rows = (data?.board ?? []).slice(0, 3);
@@ -193,7 +228,7 @@ function PlanScreen({ onBoard }: { onBoard: () => void }) {
   return (
     <main className="wrap">
       <header>
-        <h1>Heading home</h1>
+        <h1>{commute.id === "to-home" ? "Heading home" : "Heading to work"}</h1>
         <span className="hbtns">
           <button className={`mapbtn${mapOpen ? " on" : ""}`} onClick={() => setMapOpen((v) => !v)}>
             Map
@@ -204,7 +239,9 @@ function PlanScreen({ onBoard }: { onBoard: () => void }) {
           </span>
         </span>
       </header>
-      <div className="sub">{data ? `${data.origin} → ${data.destination}` : `Bus ${FIRST_SERVICE} from your office stop`}</div>
+      <button className="sub dirflip" onClick={onFlip} title="Switch direction">
+        {commute.origin} → {commute.destination} <span className="swap">⇄</span>
+      </button>
 
       {mapOpen && (
         <div className="mapcard">
@@ -213,7 +250,7 @@ function PlanScreen({ onBoard }: { onBoard: () => void }) {
             buses={mapData?.map.buses ?? []}
             user={user}
             now={mapData?.now ?? now}
-            watchServices={[FIRST_SERVICE]}
+            watchServices={[trunk]}
           />
         </div>
       )}
@@ -223,13 +260,13 @@ function PlanScreen({ onBoard }: { onBoard: () => void }) {
       ) : !data || (rows.length === 0 && (error || data.partial)) ? (
         <div className="note">Can&rsquo;t reach LTA right now. Retrying…</div>
       ) : rows.length === 0 ? (
-        <div className="note">No {FIRST_SERVICE} buses right now.</div>
+        <div className="note">No {trunk} buses right now.</div>
       ) : (
         <>
-          <Rail rows={rows} now={now} sel={sIdx} onPick={setSel} />
-          {active && <Detail row={active} now={now} />}
+          <Rail rows={rows} now={now} sel={sIdx} onPick={setSel} dest={destLabel(commute)} />
+          {active && <Detail commute={commute} row={active} now={now} />}
           <button className="boardbtn" onClick={onBoard}>
-            I just boarded the {FIRST_SERVICE} →
+            I just boarded the {trunk} →
           </button>
         </>
       )}
@@ -244,13 +281,22 @@ function PlanScreen({ onBoard }: { onBoard: () => void }) {
 //  margin is the familiar "wait 1m" pill on the connecting bus.
 // ---------------------------------------------------------------------------
 
-function JourneyScreen({ journey, setJourney }: { journey: Journey; setJourney: (j: Journey | null) => void }) {
+function JourneyScreen({
+  commute,
+  journey,
+  setJourney,
+}: {
+  commute: CommuteDirection;
+  journey: Journey;
+  setJourney: (j: Journey | null) => void;
+}) {
   const [data, setData] = useState<TrackResponse | null>(null);
   const [error, setError] = useState(false);
   const user = useGeo(true);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams({
+      dir: journey.dir,
       legIndex: String(journey.legIndex),
       boardedMs: String(journey.boardedMs),
     });
@@ -276,14 +322,16 @@ function JourneyScreen({ journey, setJourney }: { journey: Journey; setJourney: 
   }, [load]);
 
   const now = data?.now ?? Date.now();
-  const service = data?.service ?? journey.service ?? FIRST_SERVICE;
+  const service = data?.service ?? journey.service ?? firstService(commute);
   const etaMin = data ? Math.max(0, minutesFromNow(data.myEtaMs, now)) : null;
-  const ordered = data ? [...data.options].sort((a, b) => routeRank(a.planId) - routeRank(b.planId)) : [];
+  const ordered = data
+    ? [...data.options].sort((a, b) => routeRank(commute, a.planId) - routeRank(commute, b.planId))
+    : [];
 
   return (
     <main className="wrap">
       <header>
-        <h1>Heading home</h1>
+        <h1>{commute.id === "to-home" ? "Heading home" : "Heading to work"}</h1>
         <span className="hbtns">
           <button className="endbtn" onClick={() => setJourney(null)}>
             End trip
@@ -303,7 +351,7 @@ function JourneyScreen({ journey, setJourney }: { journey: Journey; setJourney: 
           user={user}
           now={now}
           myService={service}
-          watchServices={watchServicesFor(journey)}
+          watchServices={watchServicesFor(commute, journey)}
         />
       </div>
 
@@ -320,7 +368,15 @@ function JourneyScreen({ journey, setJourney }: { journey: Journey; setJourney: 
           </div>
           <div className="options">
             {ordered.map((opt) => (
-              <JourneyOption key={opt.planId} opt={opt} journey={journey} track={data} now={now} setJourney={setJourney} />
+              <JourneyOption
+                key={opt.planId}
+                commute={commute}
+                opt={opt}
+                journey={journey}
+                track={data}
+                now={now}
+                setJourney={setJourney}
+              />
             ))}
           </div>
         </div>
@@ -331,23 +387,25 @@ function JourneyScreen({ journey, setJourney }: { journey: Journey; setJourney: 
 
 /** A planning-screen option card kept alive while aboard, plus its advance action. */
 function JourneyOption({
+  commute,
   opt,
   journey,
   track,
   now,
   setJourney,
 }: {
+  commute: CommuteDirection;
   opt: TrackOption;
   journey: Journey;
   track: TrackResponse;
   now: number;
   setJourney: (j: Journey | null) => void;
 }) {
-  const plan = PLANS.find((p) => p.id === opt.planId);
+  const plan = commute.plans.find((p) => p.id === opt.planId);
   if (!plan) return null;
   // BEST only matters while there's still a choice to make.
   const best = opt.best && journey.planId == null;
-  const { nodes, conns } = buildJourney(opt, now);
+  const { nodes, conns } = buildJourney(opt, now, destLabel(commute));
   const home = nodes[nodes.length - 1] as HomeNode;
 
   const idx = nextRideIndex(plan, journey.legIndex);
@@ -357,7 +415,7 @@ function JourneyOption({
     <div className={`opt${best ? " best" : ""}`}>
       <div className="ohead">
         <span className="oname">
-          {strategyName(opt.planId)}
+          {strategyName(commute, opt.planId)}
           {best && <span className="badge">BEST</span>}
         </span>
         <span className="oarr">
@@ -377,7 +435,9 @@ function JourneyOption({
           leg.alreadyAboard ? (
             <button
               className="act"
-              onClick={() => setJourney({ planId: plan.id, legIndex: idx, boardedMs: track.myEtaMs })}
+              onClick={() =>
+                setJourney({ dir: journey.dir, planId: plan.id, legIndex: idx, boardedMs: track.myEtaMs })
+              }
             >
               Staying on past {leg.board.name}
             </button>
@@ -386,7 +446,9 @@ function JourneyOption({
               <button
                 key={s}
                 className="act"
-                onClick={() => setJourney({ planId: plan.id, legIndex: idx, boardedMs: Date.now(), service: s })}
+                onClick={() =>
+                  setJourney({ dir: journey.dir, planId: plan.id, legIndex: idx, boardedMs: Date.now(), service: s })
+                }
               >
                 I&rsquo;m on the {s}
               </button>
@@ -394,7 +456,7 @@ function JourneyOption({
           )
         ) : (
           <button className="act done" onClick={() => setJourney(null)}>
-            I&rsquo;m home — end trip
+            I&rsquo;m {commute.id === "to-home" ? "home" : "at work"} — end trip
           </button>
         )}
       </div>
@@ -402,10 +464,22 @@ function JourneyOption({
   );
 }
 
-/** Top rail: the upcoming bus-21 departures, each showing when it reaches your
- * stop AND when that departure lands you home. Lets you compare at a glance. */
-function Rail({ rows, now, sel, onPick }: { rows: LeaveByRow[]; now: number; sel: number; onPick: (i: number) => void }) {
-  const service = rows[0]?.firstService ?? FIRST_SERVICE;
+/** Top rail: the upcoming trunk-bus departures, each showing when it reaches
+ * your stop AND when that departure lands you at the destination. */
+function Rail({
+  rows,
+  now,
+  sel,
+  onPick,
+  dest,
+}: {
+  rows: LeaveByRow[];
+  now: number;
+  sel: number;
+  onPick: (i: number) => void;
+  dest: string;
+}) {
+  const service = rows[0]?.firstService ?? "";
   return (
     <div className="railwrap">
       <div className="raillabel">Next {service} buses</div>
@@ -419,7 +493,7 @@ function Rail({ rows, now, sel, onPick }: { rows: LeaveByRow[]; now: number; sel
                 {mins === 0 ? "now" : mins}
                 {mins !== 0 && <small>min</small>}
               </div>
-              <div className="home">{home != null ? `home ${fmtClock(home)}` : "—"}</div>
+              <div className="home">{home != null ? `${dest} ${fmtClock(home)}` : "—"}</div>
             </button>
           );
         })}
@@ -428,13 +502,15 @@ function Rail({ rows, now, sel, onPick }: { rows: LeaveByRow[]; now: number; sel
   );
 }
 
-function Detail({ row, now }: { row: LeaveByRow; now: number }) {
+function Detail({ commute, row, now }: { commute: CommuteDirection; row: LeaveByRow; now: number }) {
   const leave = row.leaveOfficeMs;
   const leaveMin = leave != null ? minutesFromNow(leave, now) : null;
 
   // `options` is ranked best-first, so the top one is the recommendation.
   const bestId = row.options[0]?.planId;
-  const ordered = [...row.options].sort((a, b) => routeRank(a.planId) - routeRank(b.planId));
+  const ordered = [...row.options].sort(
+    (a, b) => routeRank(commute, a.planId) - routeRank(commute, b.planId),
+  );
 
   return (
     <div className="detail">
@@ -444,23 +520,29 @@ function Detail({ row, now }: { row: LeaveByRow; now: number }) {
       </div>
       <div className="options">
         {ordered.map((opt) => (
-          <Option key={opt.planId} opt={opt} best={opt.planId === bestId} now={now} />
+          <Option
+            key={opt.planId}
+            commute={commute}
+            opt={opt}
+            best={opt.planId === bestId}
+            now={now}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function strategyName(planId: string): string {
-  return planId === "perfect" ? "Change to 26" : "Stay on 21";
+function strategyName(commute: CommuteDirection, planId: string): string {
+  const plan = commute.plans.find((p) => p.id === planId);
+  return plan?.strategy ?? plan?.label ?? planId;
 }
 
-// Keep the routes in a FIXED order (Change to 26 on top, Stay on 21 below) so
-// they don't swap places between refreshes — we just move the highlight.
-const ROUTE_ORDER = ["perfect", "stay-21-eunos"];
-function routeRank(planId: string): number {
-  const i = ROUTE_ORDER.indexOf(planId);
-  return i === -1 ? ROUTE_ORDER.length : i;
+/** Keep routes in their CONFIGURED order so they don't swap places between
+ * refreshes — only the highlight moves. */
+function routeRank(commute: CommuteDirection, planId: string): number {
+  const i = commute.plans.findIndex((p) => p.id === planId);
+  return i === -1 ? commute.plans.length : i;
 }
 
 const LOAD_CLASS: Record<LoadCode, string> = {
@@ -486,7 +568,7 @@ type BusNode = {
   /** Journey mode: the bus you're sitting on right now. */
   riding?: boolean;
 };
-type HomeNode = { kind: "home"; clock: string };
+type HomeNode = { kind: "home"; clock: string; label: string };
 type JNode = BusNode | HomeNode;
 /** `grow` sizes the connector to the in-vehicle ride time it spans, so the
  * timeline reflects real geography (short hops short, long rides long). */
@@ -509,7 +591,7 @@ function busNode(r: RideView, now: number, withWait: boolean): BusNode {
 /** What the timeline needs from an option — PlanOption and TrackOption both fit. */
 type JourneyLike = Pick<PlanOption, "rides" | "arriveHomeMs" | "estimated">;
 
-function buildJourney(opt: JourneyLike, now: number): { nodes: JNode[]; conns: JConn[] } {
+function buildJourney(opt: JourneyLike, now: number, dest = "home"): { nodes: JNode[]; conns: JConn[] } {
   // Show only the buses you actively board: the first bus, then each connecting
   // bus (with its transfer wait attached). "Stay seated" legs are implicit — no
   // intermediate stop node, no "stay on" label. In journey mode the first ride
@@ -537,18 +619,29 @@ function buildJourney(opt: JourneyLike, now: number): { nodes: JNode[]; conns: J
   nodes.push({
     kind: "home",
     clock: opt.arriveHomeMs != null ? `${opt.estimated ? "~" : ""}${fmtClock(opt.arriveHomeMs)}` : "—",
+    label: dest,
   });
   return { nodes, conns };
 }
 
-function Option({ opt, best, now }: { opt: PlanOption; best: boolean; now: number }) {
-  const { nodes, conns } = buildJourney(opt, now);
+function Option({
+  commute,
+  opt,
+  best,
+  now,
+}: {
+  commute: CommuteDirection;
+  opt: PlanOption;
+  best: boolean;
+  now: number;
+}) {
+  const { nodes, conns } = buildJourney(opt, now, destLabel(commute));
   const home = nodes[nodes.length - 1] as HomeNode;
   return (
     <div className={`opt${best ? " best" : ""}`}>
       <div className="ohead">
         <span className="oname">
-          {strategyName(opt.planId)}
+          {strategyName(commute, opt.planId)}
           {best && <span className="badge">BEST</span>}
         </span>
         <span className="oarr">
@@ -586,7 +679,7 @@ function Node({ n }: { n: JNode }) {
   return (
     <span className="node home">
       <span className="hmark" />
-      <span className="hlabel">home</span>
+      <span className="hlabel">{n.label}</span>
     </span>
   );
 }

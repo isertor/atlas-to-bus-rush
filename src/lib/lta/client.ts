@@ -1,5 +1,6 @@
-import { PLANS } from "@/config/commute";
+import { ALL_PLANS } from "@/config/commute";
 import type { BusArrival } from "@/lib/engine/types";
+import { stopsInPlans } from "@/lib/map";
 import { MIN } from "@/lib/time";
 import { parseLoad } from "./load";
 import { mockStopCoord } from "./stops";
@@ -71,10 +72,10 @@ function toArrival(nb: LtaNextBus | undefined): BusArrival | null {
 
 const LOADS = ["SEA", "SDA", "LSD"] as const;
 
-/** All ride services referenced anywhere in the configured plans (incl. anyOf). */
+/** All ride services referenced anywhere in EITHER direction (incl. anyOf). */
 function configuredServices(): string[] {
   const set = new Set<string>();
-  for (const plan of PLANS) {
+  for (const plan of ALL_PLANS) {
     for (const leg of plan.legs) {
       if (leg.kind === "ride") {
         set.add(leg.service);
@@ -85,24 +86,10 @@ function configuredServices(): string[] {
   return [...set];
 }
 
-/** Journey-ordered stop codes (board + alight of every ride leg). */
-function orderedStopCodes(): string[] {
-  const seen = new Set<string>();
-  for (const plan of PLANS) {
-    for (const leg of plan.legs) {
-      if (leg.kind === "ride") {
-        seen.add(leg.board.code);
-        seen.add(leg.alight.code);
-      }
-    }
-  }
-  return [...seen];
-}
-
 /** Which services the plans BOARD at each stop (incl. anyOf alternatives). */
 function boardedServicesAt(stopCode: string): Set<string> {
   const set = new Set<string>();
-  for (const plan of PLANS) {
+  for (const plan of ALL_PLANS) {
     for (const leg of plan.legs) {
       if (leg.kind === "ride" && leg.board.code === stopCode) {
         set.add(leg.service);
@@ -121,7 +108,7 @@ function mockStopArrivals(stopCode: string): Record<string, BusArrival[]> {
   // the demo map shows the buses you'd actually be watching for, not noise),
   // and never at alight stops — so live ride-time matching stays estimated in
   // demo mode, exactly as before.
-  const stopCodes = orderedStopCodes();
+  const stopCodes = stopsInPlans(ALL_PLANS); // canonical layout, both directions
   const boardedHere = boardedServicesAt(stopCode);
   const here = mockStopCoord(stopCode, stopCodes);
   // Cover whatever services the live config uses, so the demo always connects:
