@@ -1,16 +1,149 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Fragment, useCallback, useEffect, useState } from "react";
-import type { LeaveByRow, PlanOption } from "@/lib/engine/board";
-import type { LoadCode } from "@/lib/engine/types";
+import { PLANS } from "@/config/commute";
+import type { UserPos } from "@/components/JourneyMap";
+import type { MapResponse } from "@/app/api/map/route";
+import type { TrackResponse } from "@/app/api/track/route";
+import type { LeaveByRow, PlanOption, RideView } from "@/lib/engine/board";
+import type { TrackOption } from "@/lib/engine/track";
+import type { LoadCode, Plan, RideLeg } from "@/lib/engine/types";
 import type { RecommendResult } from "@/lib/recommend";
 import { fmtClock, minutesFromNow } from "@/lib/time";
 
+// Leaflet touches `window`; load it client-side only.
+const JourneyMap = dynamic(() => import("@/components/JourneyMap"), { ssr: false });
+
+// ---------------------------------------------------------------------------
+//  Journey state — "I'm ON a bus".
+//
+//  Persisted to localStorage so locking the phone or refreshing mid-ride
+//  doesn't lose the trip. While a journey is active the app polls /api/track
+//  (anchored to the boarded bus, not the office stop) instead of the board,
+//  which is what keeps the committed option from vanishing once the bus
+//  leaves the first stop.
+// ---------------------------------------------------------------------------
+
+interface Journey {
+  planId: string | null; // null while still deciding on the shared trunk
+  legIndex: number;
+  boardedMs: number;
+  service?: string; // actual boarded service on an anyOf leg
+}
+
+const JOURNEY_KEY = "bus-rush-journey-v1";
+const JOURNEY_TTL_MS = 3 * 60 * 60 * 1000; // a commute is over well within 3h
+
+function loadJourney(): Journey | null {
+  try {
+    const raw = localStorage.getItem(JOURNEY_KEY);
+    if (!raw) return null;
+    const { journey, at } = JSON.parse(raw) as { journey: Journey; at: number };
+    if (Date.now() - at > JOURNEY_TTL_MS) return null;
+    const leg = PLANS[0]?.legs[journey.legIndex];
+    if (!leg) return null; // config changed since it was saved
+    return journey;
+  } catch {
+    return null;
+  }
+}
+
+function saveJourney(journey: Journey | null) {
+  try {
+    if (journey) localStorage.setItem(JOURNEY_KEY, JSON.stringify({ journey, at: Date.now() }));
+    else localStorage.removeItem(JOURNEY_KEY);
+  } catch {
+    // private mode etc. — journey just won't survive a refresh
+  }
+}
+
+const FIRST_RIDE_INDEX = Math.max(0, PLANS[0].legs.findIndex((l) => l.kind === "ride"));
+const FIRST_SERVICE = (PLANS[0].legs[FIRST_RIDE_INDEX] as RideLeg).service;
+
+/** Index of the next ride leg after `after`, or -1. */
+function nextRideIndex(plan: Plan, after: number): number {
+  for (let i = after + 1; i < plan.legs.length; i++) {
+    if (plan.legs[i].kind === "ride") return i;
+  }
+  return -1;
+}
+
+/** Services of the next FRESH boarding (skipping stay-seated legs) for map highlighting. */
+function watchServicesFor(journey: Journey): string[] {
+  const plans = journey.planId ? PLANS.filter((p) => p.id === journey.planId) : PLANS;
+  const set = new Set<string>();
+  for (const plan of plans) {
+    let i = nextRideIndex(plan, journey.legIndex);
+    while (i !== -1) {
+      const leg = plan.legs[i] as RideLeg;
+      if (!leg.alreadyAboard) {
+        for (const s of leg.anyOf?.length ? leg.anyOf : [leg.service]) set.add(s);
+        break;
+      }
+      i = nextRideIndex(plan, i);
+    }
+  }
+  return [...set];
+}
+
+/** Browser geolocation as a live position, while `active`. */
+function useGeo(active: boolean): UserPos | null {
+  const [pos, setPos] = useState<UserPos | null>(null);
+  useEffect(() => {
+    if (!active || typeof navigator === "undefined" || !navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      (p) => setPos({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, [active]);
+  return active ? pos : null;
+}
+
 export default function Page() {
+  const [journey, setJourneyState] = useState<Journey | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setJourneyState(loadJourney());
+    setHydrated(true);
+  }, []);
+
+  const setJourney = useCallback((j: Journey | null) => {
+    saveJourney(j);
+    setJourneyState(j);
+  }, []);
+
+  if (!hydrated) {
+    return (
+      <main className="wrap">
+        <div className="spinner" />
+      </main>
+    );
+  }
+
+  return journey ? (
+    <JourneyScreen journey={journey} setJourney={setJourney} />
+  ) : (
+    <PlanScreen onBoard={() => setJourney({ planId: null, legIndex: FIRST_RIDE_INDEX, boardedMs: Date.now() })} />
+  );
+}
+
+// ---------------------------------------------------------------------------
+//  Planning screen — the leave-by board (unchanged behaviour) + map preview
+//  + the "I just boarded" entry point into journey mode.
+// ---------------------------------------------------------------------------
+
+function PlanScreen({ onBoard }: { onBoard: () => void }) {
   const [data, setData] = useState<RecommendResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [sel, setSel] = useState(0);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [mapData, setMapData] = useState<MapResponse | null>(null);
+  const user = useGeo(mapOpen);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,6 +165,26 @@ export default function Page() {
     return () => clearInterval(id);
   }, [load]);
 
+  // Map preview polls only while open (separate endpoint; board stays light).
+  useEffect(() => {
+    if (!mapOpen) return;
+    let alive = true;
+    const loadMap = async () => {
+      try {
+        const res = await fetch(`/api/map`, { cache: "no-store" });
+        if (res.ok && alive) setMapData(await res.json());
+      } catch {
+        // keep last map
+      }
+    };
+    loadMap();
+    const id = setInterval(loadMap, 20_000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [mapOpen]);
+
   const now = data?.now ?? Date.now();
   const rows = (data?.board ?? []).slice(0, 3);
   const sIdx = Math.min(sel, Math.max(0, rows.length - 1));
@@ -41,33 +194,237 @@ export default function Page() {
     <main className="wrap">
       <header>
         <h1>Heading home</h1>
-        <span className={`live${error ? " off" : ""}`}>
-          <span className="dot" />
-          {error ? "reconnecting" : data?.mock ? "demo" : "live"}
+        <span className="hbtns">
+          <button className={`mapbtn${mapOpen ? " on" : ""}`} onClick={() => setMapOpen((v) => !v)}>
+            Map
+          </button>
+          <span className={`live${error ? " off" : ""}`}>
+            <span className="dot" />
+            {error ? "reconnecting" : data?.mock ? "demo" : "live"}
+          </span>
         </span>
       </header>
-      <div className="sub">{data ? `${data.origin} → ${data.destination}` : "Bus 21 from your office stop"}</div>
+      <div className="sub">{data ? `${data.origin} → ${data.destination}` : `Bus ${FIRST_SERVICE} from your office stop`}</div>
+
+      {mapOpen && (
+        <div className="mapcard">
+          <JourneyMap
+            stops={mapData?.map.stops ?? []}
+            buses={mapData?.map.buses ?? []}
+            user={user}
+            now={mapData?.now ?? now}
+            watchServices={[FIRST_SERVICE]}
+          />
+        </div>
+      )}
 
       {!data && loading ? (
         <div className="spinner" />
       ) : !data || (rows.length === 0 && (error || data.partial)) ? (
         <div className="note">Can&rsquo;t reach LTA right now. Retrying…</div>
       ) : rows.length === 0 ? (
-        <div className="note">No 21 buses right now.</div>
+        <div className="note">No {FIRST_SERVICE} buses right now.</div>
       ) : (
         <>
           <Rail rows={rows} now={now} sel={sIdx} onPick={setSel} />
           {active && <Detail row={active} now={now} />}
+          <button className="boardbtn" onClick={onBoard}>
+            I just boarded the {FIRST_SERVICE} →
+          </button>
+          <div className="boardhint">Tracking follows your bus, so your options stay live after it leaves.</div>
         </>
       )}
     </main>
   );
 }
 
+// ---------------------------------------------------------------------------
+//  Journey screen — map on top, your bus's next stop, live stay-vs-switch
+//  options with connection margins, and the stage-advance actions.
+// ---------------------------------------------------------------------------
+
+function JourneyScreen({ journey, setJourney }: { journey: Journey; setJourney: (j: Journey | null) => void }) {
+  const [data, setData] = useState<TrackResponse | null>(null);
+  const [error, setError] = useState(false);
+  const user = useGeo(true);
+
+  const load = useCallback(async () => {
+    const params = new URLSearchParams({
+      legIndex: String(journey.legIndex),
+      boardedMs: String(journey.boardedMs),
+    });
+    if (journey.planId) params.set("planId", journey.planId);
+    if (journey.service) params.set("service", journey.service);
+    try {
+      const res = await fetch(`/api/track?${params}`, { cache: "no-store" });
+      if (!res.ok) throw new Error();
+      setData(await res.json());
+      setError(false);
+    } catch {
+      setError(true); // keep last good data on screen
+    }
+  }, [journey]);
+
+  useEffect(() => {
+    setData(null);
+    load();
+    // On board you need the connection margin fresh — poll faster than the
+    // planning board (15s vs 30s); still well inside LTA's rate limits.
+    const id = setInterval(load, 15_000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  const now = data?.now ?? Date.now();
+  const service = data?.service ?? journey.service ?? FIRST_SERVICE;
+  const etaMin = data ? Math.max(0, minutesFromNow(data.myEtaMs, now)) : null;
+
+  return (
+    <main className="wrap">
+      <header>
+        <h1>On the {service}</h1>
+        <span className="hbtns">
+          <button className="endbtn" onClick={() => setJourney(null)}>
+            End trip
+          </button>
+          <span className={`live${error ? " off" : ""}`}>
+            <span className="dot" />
+            {error ? "reconnecting" : data?.mock ? "demo" : "live"}
+          </span>
+        </span>
+      </header>
+      <div className="sub">
+        {data ? `Next: ${data.alightName}` : "Locating your bus…"}
+      </div>
+
+      <div className="mapcard tall">
+        <JourneyMap
+          stops={data?.map.stops ?? []}
+          buses={data?.map.buses ?? []}
+          user={user}
+          now={now}
+          myService={service}
+          watchServices={watchServicesFor(journey)}
+        />
+      </div>
+
+      {!data ? (
+        <div className="spinner" />
+      ) : (
+        <>
+          <div className="mybus">
+            <div className="big">
+              {etaMin === 0 ? `Arriving at ${data.alightName}` : `${data.alightName} in ${etaMin} min`}
+            </div>
+            <div className="by">
+              {data.myEtaSource === "estimated" ? "~" : ""}
+              {fmtClock(data.myEtaMs)}
+              {data.myEtaSource === "estimated" ? " · estimated from typical ride time" : " · matched to live ETAs"}
+            </div>
+          </div>
+
+          <div className="options">
+            {data.options.map((opt) => (
+              <TrackCard key={opt.planId} opt={opt} journey={journey} track={data} setJourney={setJourney} />
+            ))}
+          </div>
+        </>
+      )}
+    </main>
+  );
+}
+
+/** One live option while aboard: connection margin, home time, advance action. */
+function TrackCard({
+  opt,
+  journey,
+  track,
+  setJourney,
+}: {
+  opt: TrackOption;
+  journey: Journey;
+  track: TrackResponse;
+  setJourney: (j: Journey | null) => void;
+}) {
+  const plan = PLANS.find((p) => p.id === opt.planId);
+  if (!plan) return null;
+  // BEST only matters while there's still a choice to make.
+  const showBest = opt.best && journey.planId == null;
+
+  const idx = nextRideIndex(plan, journey.legIndex);
+  const leg = idx !== -1 ? (plan.legs[idx] as RideLeg) : null;
+  const connect = opt.rides.find((r) => !r.alreadyAboard) ?? null;
+
+  return (
+    <div className={`opt${showBest ? " best" : ""}`}>
+      <div className="ohead">
+        <span className="oname">
+          {strategyName(opt.planId)}
+          {showBest && <span className="badge">BEST</span>}
+        </span>
+        <span className="oarr">
+          <span className="t">
+            {opt.arriveHomeMs != null ? `${opt.estimated ? "~" : ""}${fmtClock(opt.arriveHomeMs)}` : "—"}
+          </span>
+          <span className="osub">home</span>
+        </span>
+      </div>
+
+      {connect && opt.connectMin != null ? (
+        <div className={`connect ${connectTone(opt.connectMin)}`}>
+          <b>{connect.service}</b> at {connect.boardName.toLowerCase()}{" "}
+          {opt.connectSource === "estimated" ? "~" : ""}
+          {opt.connectMin <= 0 ? "as you arrive" : `${opt.connectMin} min after you`}
+          {opt.connectMin <= 1 && opt.connectSource === "live" ? " — tight" : ""}
+        </div>
+      ) : (
+        <div className="connect ok">ride to the end, then walk home</div>
+      )}
+
+      {!opt.feasible && <div className="connect long">{opt.reason ?? "No live data for this option"}</div>}
+
+      {leg && (
+        <div className="acts">
+          {leg.alreadyAboard ? (
+            <button
+              className="act"
+              onClick={() => setJourney({ planId: plan.id, legIndex: idx, boardedMs: track.myEtaMs })}
+            >
+              Staying on past {leg.board.name}
+            </button>
+          ) : (
+            (leg.anyOf?.length ? leg.anyOf : [leg.service]).map((s) => (
+              <button
+                key={s}
+                className="act"
+                onClick={() => setJourney({ planId: plan.id, legIndex: idx, boardedMs: Date.now(), service: s })}
+              >
+                I&rsquo;m on the {s}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      {!leg && (
+        <div className="acts">
+          <button className="act done" onClick={() => setJourney(null)}>
+            I&rsquo;m home — end trip
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function connectTone(min: number): string {
+  if (min <= 1) return "tight";
+  if (min > 10) return "long";
+  return "ok";
+}
+
 /** Top rail: the upcoming bus-21 departures, each showing when it reaches your
  * stop AND when that departure lands you home. Lets you compare at a glance. */
 function Rail({ rows, now, sel, onPick }: { rows: LeaveByRow[]; now: number; sel: number; onPick: (i: number) => void }) {
-  const service = rows[0]?.firstService ?? "21";
+  const service = rows[0]?.firstService ?? FIRST_SERVICE;
   return (
     <div className="railwrap">
       <div className="raillabel">Next {service} buses</div>
@@ -120,8 +477,8 @@ function Detail({ row, now }: { row: LeaveByRow; now: number }) {
   );
 }
 
-function strategyName(opt: PlanOption): string {
-  return opt.planId === "perfect" ? "Change to 26" : "Stay on 21";
+function strategyName(planId: string): string {
+  return planId === "perfect" ? "Change to 26" : "Stay on 21";
 }
 
 const LOAD_CLASS: Record<LoadCode, string> = {
@@ -153,7 +510,7 @@ type JConn = { kind: "ride" | "walk"; grow: number };
 
 const MIN_MS = 60_000;
 
-function busNode(r: PlanOption["rides"][number], now: number, withWait: boolean): BusNode {
+function busNode(r: RideView, now: number, withWait: boolean): BusNode {
   return {
     kind: "bus",
     service: r.service,
@@ -199,7 +556,7 @@ function Option({ opt, best, now }: { opt: PlanOption; best: boolean; now: numbe
     <div className={`opt${best ? " best" : ""}`}>
       <div className="ohead">
         <span className="oname">
-          {strategyName(opt)}
+          {strategyName(opt.planId)}
           {best && <span className="badge">BEST</span>}
         </span>
         <span className="oarr">

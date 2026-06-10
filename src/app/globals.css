@@ -354,6 +354,251 @@ h1 {
   border-top-style: dotted;
 }
 
+/* header buttons (map toggle / end trip) */
+.hbtns {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.mapbtn,
+.endbtn {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--steel);
+  background: var(--surf);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+.mapbtn.on {
+  color: var(--accent);
+  border-color: rgba(107, 79, 214, 0.35);
+  background: var(--accent-weak);
+}
+.endbtn {
+  color: var(--alert);
+}
+
+/* map */
+.mapcard {
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 18px;
+  background: var(--sunk);
+}
+.mapcard .map {
+  height: 240px;
+  width: 100%;
+}
+.mapcard.tall .map {
+  height: 300px;
+}
+.leaflet-container {
+  font-family: var(--font);
+}
+.mrecenter {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surf);
+  color: var(--steel);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* map markers (Leaflet divIcons) */
+.mwrap {
+  background: none;
+  border: none;
+}
+.mstop {
+  position: relative;
+  display: block;
+}
+.mstop i {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--surf);
+  border: 2.5px solid var(--ink);
+  box-sizing: border-box;
+}
+.mstop b {
+  position: absolute;
+  left: 14px;
+  top: -3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.mbus {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 7px;
+  background: var(--surf);
+  color: var(--steel);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+}
+.mbus i {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+.mbus.mine {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+.mbus.watch {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.muser {
+  position: relative;
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+.muser i {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #1d7df2;
+  border: 2.5px solid #fff;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 0 rgba(29, 125, 242, 0.4);
+  animation: pulse 2s ease-out infinite;
+}
+@keyframes pulse {
+  70% {
+    box-shadow: 0 0 0 12px rgba(29, 125, 242, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(29, 125, 242, 0);
+  }
+}
+
+/* journey mode */
+.mybus {
+  background: var(--surf);
+  border-radius: 22px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 12px;
+}
+.mybus .big {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.mybus .by {
+  font-size: 13px;
+  color: var(--faint);
+  margin-top: 5px;
+}
+/* journey option cards sit on the page background, so give them a surface */
+.wrap > .options .opt {
+  background: var(--surf);
+}
+.wrap > .options .opt.best {
+  background: var(--accent-weak);
+}
+.connect {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 10px;
+  padding: 8px 11px;
+}
+.connect b {
+  font-weight: 600;
+}
+.connect.ok {
+  color: var(--good);
+  background: var(--good-bg);
+}
+.connect.tight {
+  color: var(--bad);
+  background: var(--bad-bg);
+}
+.connect.long {
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+.acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.act {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--surf);
+  border: 1px solid rgba(107, 79, 214, 0.35);
+  border-radius: 10px;
+  padding: 9px 13px;
+  cursor: pointer;
+}
+.act.done {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* boarding entry point on the planning screen */
+.boardbtn {
+  margin-top: 16px;
+  width: 100%;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+.boardbtn:active {
+  opacity: 0.85;
+}
+.boardhint {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--faint);
+}
+.osub {
+  font-size: 10px;
+  color: var(--faint);
+}
+
 /* states */
 .note {
   text-align: center;

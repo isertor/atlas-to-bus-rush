@@ -2,6 +2,7 @@ import { PLANS } from "@/config/commute";
 import type { BusArrival } from "@/lib/engine/types";
 import { MIN } from "@/lib/time";
 import { parseLoad } from "./load";
+import { mockStopCoord } from "./stops";
 import type { LtaBusArrivalResponse, LtaNextBus } from "./types";
 
 const LTA_BASE = "https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival";
@@ -84,9 +85,45 @@ function configuredServices(): string[] {
   return [...set];
 }
 
+/** Journey-ordered stop codes (board + alight of every ride leg). */
+function orderedStopCodes(): string[] {
+  const seen = new Set<string>();
+  for (const plan of PLANS) {
+    for (const leg of plan.legs) {
+      if (leg.kind === "ride") {
+        seen.add(leg.board.code);
+        seen.add(leg.alight.code);
+      }
+    }
+  }
+  return [...seen];
+}
+
+/** Which services the plans BOARD at each stop (incl. anyOf alternatives). */
+function boardedServicesAt(stopCode: string): Set<string> {
+  const set = new Set<string>();
+  for (const plan of PLANS) {
+    for (const leg of plan.legs) {
+      if (leg.kind === "ride" && leg.board.code === stopCode) {
+        set.add(leg.service);
+        for (const s of leg.anyOf ?? []) set.add(s);
+      }
+    }
+  }
+  return set;
+}
+
 function mockStopArrivals(stopCode: string): Record<string, BusArrival[]> {
   const now = Date.now();
   const seed = [...stopCode].reduce((s, c) => s + c.charCodeAt(0), 0);
+  // Demo map positions: a bus N minutes out sits N "minutes" back along the
+  // mock stop line. Only attached where the journey BOARDS that service (so
+  // the demo map shows the buses you'd actually be watching for, not noise),
+  // and never at alight stops — so live ride-time matching stays estimated in
+  // demo mode, exactly as before.
+  const stopCodes = orderedStopCodes();
+  const boardedHere = boardedServicesAt(stopCode);
+  const here = mockStopCoord(stopCode, stopCodes);
   // Cover whatever services the live config uses, so the demo always connects:
   const services = configuredServices();
   // NOTE: real LTA returns only the next ~3 buses per service. We emit a longer
@@ -105,11 +142,18 @@ function mockStopArrivals(stopCode: string): Record<string, BusArrival[]> {
     out[svc] = [0, 1, 2, 3, 4, 5].map((n) => {
       const offsetMin = base + n * hw;
       const loadIdx = (seed + i + n) % LOADS.length;
+      const withPos = boardedHere.has(svc) && n < 2 && offsetMin <= 30;
       return {
         arrivalMs: now + offsetMin * MIN,
         load: parseLoad(LOADS[loadIdx]),
         type: n % 2 === 0 ? "DD" : "SD",
         monitored: true,
+        ...(withPos
+          ? {
+              lat: here.lat - offsetMin * 0.00035 + (((seed + svc.charCodeAt(0)) % 5) - 2) * 0.0006,
+              lng: here.lng - offsetMin * 0.0011,
+            }
+          : {}),
       } satisfies BusArrival;
     });
   });

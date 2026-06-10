@@ -45,6 +45,11 @@ Pure, unit-tested functions — no I/O, no framework:
   (for the leave-by board), and from-the-transfer (for switch-vs-stay).
 - **`score.ts`** — turns perceived arrivals into a 0–100 score relative to the best option.
 - **`board.ts`** — `buildLeaveByBoard()`, `decideLeaveNow()`, `decideAtTransfer()`.
+- **`track.ts`** — `trackJourney()`: journey mode. Once you tap *"I just boarded"*, the
+  evaluation anchor flips from the office stop's ETAs to **your bus** (boarding time matched
+  against downstream stops' live ETAs), so the option you committed to never disappears when
+  the bus leaves the first stop. Returns both options with **connection margins** ("26 reaches
+  the transfer 1 min after you — tight") measured from *your* projected arrival.
 
 Everything is tunable in **`src/config/preferences.ts`**: crowd penalties (how many "perceived
 minutes" a packed bus costs you), wait penalty, safety/transfer buffers, score steepness.
@@ -56,6 +61,23 @@ minutes" a packed bus costs you), wait penalty, safety/transfer buffers, score s
 | **Leave-by** | `board` | Next departures, each with a *leave-by* time and a cross-departure optimality score. |
 | **Leave now** | `leave-now` | "I'm leaving now — which route is best right now?" |
 | **On the bus** | `at-transfer` | "I'm on 26 at the transfer — switch to 21 now, or stay on?" |
+
+### Journey mode + live map
+
+Tap **"I just boarded"** on the planning screen and the app switches to journey mode:
+
+- Polls `GET /api/track?legIndex=&boardedMs=[&planId=][&service=]` every **15s** (planning
+  board stays at 30s). The response bundles the decision options *and* the map payload, so
+  journey mode costs one round of LTA calls per poll.
+- The journey survives refreshes / phone locks (localStorage, 3h TTL) and advances by
+  explicit taps: *"I'm on the 26"* / *"Staying on past the transfer"* / *"I boarded the 24"*
+  (every `anyOf` onward service gets its own button) / *"I'm home — end trip"*.
+- The **map** (Leaflet + free OSM/CARTO raster tiles — no API key) shows the journey's stops,
+  every relevant bus as a numbered chip placed at its **live GPS position from the BusArrival
+  feed**, and you as a pulsing blue dot (browser geolocation). Your bus renders in ink, the
+  services you're trying to catch in purple — so you can literally watch the 26 behind you and
+  decide to stay on and re-board it later. Stop coordinates come from LTA's BusStops dataset,
+  fetched server-side and cached for 24h (`/api/map` powers the planning-screen preview).
 
 ---
 
@@ -115,9 +137,8 @@ Without a webhook, `/api/notify` just returns the message it *would* have sent �
 
 ## What's intentionally NOT done yet (next steps)
 
-- Real stop codes / services / timings (you'll provide these).
-- GPS-assisted position (v1 is manual taps + the always-on board, per your preference).
 - Live load of the bus you're *currently* on (LTA's feed only gives loads for *upcoming* buses;
-  the "stay on 26" leg shows `UNKNOWN` crowding for the segment you're already riding).
-- Persisting an "I boarded 26 at HH:MM" timestamp to sharpen the at-transfer estimate.
+  the leg you're already riding shows `UNKNOWN` crowding).
+- Auto-advancing journey stages from GPS (today the taps are explicit; your position is shown
+  on the map but doesn't drive state).
 - Historical crowding patterns for "26 is usually packed at 6pm".
