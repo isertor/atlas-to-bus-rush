@@ -80,8 +80,9 @@ function nextRideIndex(plan: Plan, after: number): number {
   return -1;
 }
 
-/** Services of the next FRESH boarding (skipping stay-seated legs) for map highlighting. */
-function watchServicesFor(commute: CommuteDirection, journey: Journey): string[] {
+/** Stops of the next FRESH boarding per plan (skipping stay-seated legs) — the
+ * upcoming decision points the camera should keep in view. */
+function nextBoardStopCodes(commute: CommuteDirection, journey: Journey): string[] {
   const plans = journey.planId ? commute.plans.filter((p) => p.id === journey.planId) : commute.plans;
   const set = new Set<string>();
   for (const plan of plans) {
@@ -89,7 +90,7 @@ function watchServicesFor(commute: CommuteDirection, journey: Journey): string[]
     while (i !== -1) {
       const leg = plan.legs[i] as RideLeg;
       if (!leg.alreadyAboard) {
-        for (const s of leg.anyOf?.length ? leg.anyOf : [leg.service]) set.add(s);
+        set.add(leg.board.code);
         break;
       }
       i = nextRideIndex(plan, i);
@@ -225,6 +226,13 @@ function PlanScreen({
   const sIdx = Math.min(sel, Math.max(0, rows.length - 1));
   const active = rows[sIdx];
 
+  // Camera: your boarding stop (+ you, if located) — not the whole island.
+  // No focus until map data arrives (avoids a one-point fit racing the real one).
+  const boardCode = (commute.plans[0].legs[firstRideIndex(commute)] as RideLeg).board.code;
+  const focus = mapData
+    ? [...mapData.map.stops.filter((s) => s.code === boardCode), ...(user ? [user] : [])]
+    : [];
+
   return (
     <main className="wrap">
       <header>
@@ -248,9 +256,10 @@ function PlanScreen({
           <JourneyMap
             stops={mapData?.map.stops ?? []}
             buses={mapData?.map.buses ?? []}
+            paths={mapData?.map.paths ?? []}
             user={user}
             now={mapData?.now ?? now}
-            watchServices={[trunk]}
+            focus={focus}
           />
         </div>
       )}
@@ -328,6 +337,17 @@ function JourneyScreen({
     ? [...data.options].sort((a, b) => routeRank(commute, a.planId) - routeRank(commute, b.planId))
     : [];
 
+  // Camera: you (your bus, or failing that the phone) + the next decision
+  // stops — your alight point and where you'd board the connection. No focus
+  // until track data arrives: a transient one-point fit would race the real one.
+  const focusCodes = new Set([data?.alightCode, ...nextBoardStopCodes(commute, journey)]);
+  const focus = data
+    ? [
+        ...(data.myBus ? [data.myBus] : user ? [user] : []),
+        ...data.map.stops.filter((s) => focusCodes.has(s.code)),
+      ]
+    : [];
+
   return (
     <main className="wrap">
       <header>
@@ -348,10 +368,12 @@ function JourneyScreen({
         <JourneyMap
           stops={data?.map.stops ?? []}
           buses={data?.map.buses ?? []}
+          paths={data?.map.paths ?? []}
+          me={data?.myBus ?? null}
           user={user}
           now={now}
           myService={service}
-          watchServices={watchServicesFor(commute, journey)}
+          focus={focus}
         />
       </div>
 

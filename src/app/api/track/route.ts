@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { ALL_PLANS, DIRECTIONS, parseDirectionId } from "@/config/commute";
 import { PREFERENCES } from "@/config/preferences";
-import { trackJourney, type JourneyState, type TrackResult } from "@/lib/engine/track";
+import {
+  candidatePlans,
+  nextBoardingSpecs,
+  remainingStopCodes,
+  trackJourney,
+  type JourneyState,
+  type TrackResult,
+} from "@/lib/engine/track";
 import { getStopCoords } from "@/lib/lta/stops";
 import { buildMapData, stopsInPlans, type MapData } from "@/lib/map";
+import { journeyPaths } from "@/lib/paths";
 import { buildArrivalIndex } from "@/lib/recommend";
 
 // Journey-mode endpoint: "I'm ON the bus — keep my options alive."
@@ -13,8 +21,9 @@ import { buildArrivalIndex } from "@/lib/recommend";
 // Everything is anchored to the boarded bus (legIndex + boardedMs), not the
 // origin stop, so options no longer vanish once the bus departs. Returns the
 // live stay-vs-switch options evaluated from YOUR bus's projected arrival at
-// the next decision stop, plus the map payload (stops + live bus positions)
-// in the same response — one poll, one set of LTA calls.
+// the next decision stop, plus a journey-focused map payload: only the stops
+// still ahead, only the buses you could board next, the remaining route line
+// (trimmed to your bus's live position), and your bus itself as "you".
 
 export const dynamic = "force-dynamic";
 
@@ -45,19 +54,30 @@ export async function GET(req: Request) {
     const [{ index: arrivals, failures }, coords] = await Promise.all([
       buildArrivalIndex(commute.plans),
       // Coords for BOTH directions so the mock layout stays canonical; live
-      // LTA lookups are cached for a day anyway.
+      // LTA lookups are served from the cached full table anyway.
       getStopCoords(stopsInPlans(ALL_PLANS)).catch(() => ({})),
     ]);
     const result = trackJourney(commute.plans, arrivals, { now, prefs: PREFERENCES, state });
     if (!result) {
       return NextResponse.json({ error: "No plan matches that journey position" }, { status: 400 });
     }
+    // Paths for the CANDIDATE plans only — once committed, the other option's
+    // route must disappear from the map.
+    const paths = await journeyPaths(candidatePlans(commute.plans, state), legIndex, coords, {
+      riding: true,
+      currentService: result.service,
+      myBus: result.myBus,
+    }).catch(() => []);
     const body: TrackResponse = {
       ...result,
       now,
       mock: process.env.USE_MOCK_LTA === "1" || !process.env.LTA_ACCOUNT_KEY,
       partial: failures > 0,
-      map: buildMapData(commute.plans, arrivals, coords),
+      map: buildMapData(commute.plans, arrivals, coords, {
+        specs: nextBoardingSpecs(commute.plans, state),
+        stopCodes: remainingStopCodes(commute.plans, state),
+        paths,
+      }),
     };
     return NextResponse.json(body);
   } catch (err) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PREFERENCES } from "@/config/preferences";
 import { MIN } from "@/lib/time";
-import { candidatePlans, trackJourney } from "./track";
+import { candidatePlans, nextBoardingSpecs, remainingStopCodes, trackJourney } from "./track";
 import { arrivalKey, type ArrivalIndex, type Plan } from "./types";
 
 const NOW = Date.parse("2026-06-05T17:30:00+08:00");
@@ -140,5 +140,37 @@ describe("candidatePlans", () => {
     expect(
       candidatePlans(TEST_PLANS, { planId: "stay-on-21", legIndex: 2, boardedMs: NOW }).map((p) => p.id),
     ).toEqual(["stay-on-21"]);
+  });
+});
+
+describe("map relevance helpers", () => {
+  it("nextBoardingSpecs: the NEXT fresh boarding per option, skipping stay-seated legs", () => {
+    expect(nextBoardingSpecs(TEST_PLANS, DECIDING)).toEqual([
+      { services: ["26"], stopCode: "TRF" }, // change now
+      { services: ["70", "71"], stopCode: "LAT" }, // stay seated, board later
+    ]);
+    // Committed to the final bus: nothing left to board.
+    expect(nextBoardingSpecs(TEST_PLANS, { planId: "perfect", legIndex: 2, boardedMs: NOW })).toEqual([]);
+  });
+
+  it("remainingStopCodes: only stops ahead — passed stops drop off as stages advance", () => {
+    expect(remainingStopCodes(TEST_PLANS, DECIDING)).toEqual(new Set(["TRF", "HOM", "LAT", "DRP"]));
+    // Riding the 26 home: the office and decision stops are behind you.
+    expect(remainingStopCodes(TEST_PLANS, { planId: "perfect", legIndex: 2, boardedMs: NOW })).toEqual(
+      new Set(["HOM"]),
+    );
+  });
+
+  it("exposes the matched bus's GPS as myBus when the ETA match carries one", () => {
+    const arrivals = fixture();
+    arrivals[arrivalKey("TRF", "21")] = [
+      { arrivalMs: NOW + 5 * MIN, load: "SEA", lat: 1.31, lng: 103.88 },
+      { arrivalMs: NOW + 14 * MIN, load: "SEA" },
+    ];
+    const res = trackJourney(TEST_PLANS, arrivals, { now: NOW, prefs: PREFERENCES, state: DECIDING })!;
+    expect(res.myBus).toEqual({ lat: 1.31, lng: 103.88 });
+    // No GPS on the match → myBus null (UI falls back to the phone's dot).
+    const plain = trackJourney(TEST_PLANS, fixture(), { now: NOW, prefs: PREFERENCES, state: DECIDING })!;
+    expect(plain.myBus).toBeNull();
   });
 });
