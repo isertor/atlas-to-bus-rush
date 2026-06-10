@@ -3,7 +3,7 @@ import { MIN } from "@/lib/time";
 import type { RideView } from "./board";
 import { evaluatePlan, type PlanEstimate } from "./plan";
 import { refineAboardAlightMs } from "./ridetime";
-import type { ArrivalIndex, Plan, RideLeg, WalkLeg } from "./types";
+import { arrivalKey, type ArrivalIndex, type Plan, type RideLeg, type WalkLeg } from "./types";
 
 // ---------------------------------------------------------------------------
 //  Journey tracking: "I'm ON a bus" mode.
@@ -67,6 +67,8 @@ export interface TrackResult {
   /** Predicted arrival of YOUR bus at that stop. */
   myEtaMs: number;
   myEtaSource: "live" | "estimated";
+  /** Live GPS of the bus you're on, when it could be matched. "You are here." */
+  myBus: { lat: number; lng: number } | null;
   options: TrackOption[];
 }
 
@@ -129,6 +131,12 @@ export function trackJourney(
   const refined = refineAboardAlightMs(arrivals, ride.alight.code, service, state.boardedMs, expectedRideMs);
   const myEtaMs = refined ?? state.boardedMs + expectedRideMs;
   const myEtaSource: "live" | "estimated" = refined != null ? "live" : "estimated";
+  // The matched prediction carries the vehicle's live GPS — that's "you".
+  const matched =
+    refined != null
+      ? (arrivals[arrivalKey(ride.alight.code, service)] ?? []).find((a) => a.arrivalMs === refined)
+      : undefined;
+  const myBus = matched?.lat != null && matched.lng != null ? { lat: matched.lat, lng: matched.lng } : null;
 
   const currentRide = rideView({
     service,
@@ -224,6 +232,52 @@ export function trackJourney(
     alightName: ride.alight.name,
     myEtaMs,
     myEtaSource,
+    myBus,
     options,
   };
+}
+
+/**
+ * The buses worth watching on the map right now: for each candidate plan, the
+ * NEXT fresh boarding (skipping stay-seated continuations) — its services at
+ * its boarding stop. Later boardings are noise until you get there.
+ */
+export function nextBoardingSpecs(
+  plans: Plan[],
+  state: JourneyState,
+): { services: string[]; stopCode: string }[] {
+  const specs: { services: string[]; stopCode: string }[] = [];
+  for (const plan of candidatePlans(plans, state)) {
+    for (let i = state.legIndex + 1; i < plan.legs.length; i++) {
+      const leg = plan.legs[i];
+      if (leg.kind !== "ride") continue;
+      if ((leg as RideLeg).alreadyAboard) continue;
+      const ride = leg as RideLeg;
+      specs.push({
+        services: ride.anyOf?.length ? ride.anyOf : [ride.service],
+        stopCode: ride.board.code,
+      });
+      break;
+    }
+  }
+  return specs;
+}
+
+/** Stops still AHEAD of the rider: the current alight + everything after it.
+ * Passed stops drop off the map as the journey advances. */
+export function remainingStopCodes(plans: Plan[], state: JourneyState): Set<string> {
+  const set = new Set<string>();
+  const candidates = candidatePlans(plans, state);
+  const current = candidates[0]?.legs[state.legIndex];
+  if (current?.kind === "ride") set.add((current as RideLeg).alight.code);
+  for (const plan of candidates) {
+    for (let i = state.legIndex + 1; i < plan.legs.length; i++) {
+      const leg = plan.legs[i];
+      if (leg.kind === "ride") {
+        set.add(leg.board.code);
+        set.add(leg.alight.code);
+      }
+    }
+  }
+  return set;
 }

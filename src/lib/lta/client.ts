@@ -86,12 +86,12 @@ function configuredServices(): string[] {
   return [...set];
 }
 
-/** Which services the plans BOARD at each stop (incl. anyOf alternatives). */
-function boardedServicesAt(stopCode: string): Set<string> {
+/** Services whose ride legs TOUCH a stop (board or alight, incl. anyOf). */
+function rideServicesAt(stopCode: string): Set<string> {
   const set = new Set<string>();
   for (const plan of ALL_PLANS) {
     for (const leg of plan.legs) {
-      if (leg.kind === "ride" && leg.board.code === stopCode) {
+      if (leg.kind === "ride" && (leg.board.code === stopCode || leg.alight.code === stopCode)) {
         set.add(leg.service);
         for (const s of leg.anyOf ?? []) set.add(s);
       }
@@ -104,12 +104,13 @@ function mockStopArrivals(stopCode: string): Record<string, BusArrival[]> {
   const now = Date.now();
   const seed = [...stopCode].reduce((s, c) => s + c.charCodeAt(0), 0);
   // Demo map positions: a bus N minutes out sits N "minutes" back along the
-  // mock stop line. Only attached where the journey BOARDS that service (so
-  // the demo map shows the buses you'd actually be watching for, not noise),
-  // and never at alight stops — so live ride-time matching stays estimated in
-  // demo mode, exactly as before.
+  // mock stop line. Attached where the journey's legs touch that service
+  // (board stops feed the watched-bus markers; alight stops let the tracked
+  // "my bus" get a position). Positions are synthesized per stop, so the SAME
+  // vehicle never matches across stops — live ride-time matching stays
+  // estimated in demo mode, exactly as before.
   const stopCodes = stopsInPlans(ALL_PLANS); // canonical layout, both directions
-  const boardedHere = boardedServicesAt(stopCode);
+  const relevantHere = rideServicesAt(stopCode);
   const here = mockStopCoord(stopCode, stopCodes);
   // Cover whatever services the live config uses, so the demo always connects:
   const services = configuredServices();
@@ -129,7 +130,7 @@ function mockStopArrivals(stopCode: string): Record<string, BusArrival[]> {
     out[svc] = [0, 1, 2, 3, 4, 5].map((n) => {
       const offsetMin = base + n * hw;
       const loadIdx = (seed + i + n) % LOADS.length;
-      const withPos = boardedHere.has(svc) && n < 2 && offsetMin <= 30;
+      const withPos = relevantHere.has(svc) && n < 2 && offsetMin <= 30;
       return {
         arrivalMs: now + offsetMin * MIN,
         load: parseLoad(LOADS[loadIdx]),
