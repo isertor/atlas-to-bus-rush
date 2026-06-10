@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { GeistSans } from "geist/font/sans";
+import localFont from "next/font/local";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,11 +14,22 @@ export const viewport: Viewport = {
   themeColor: "#f3f2ef",
 };
 
-// Geist — a clean neo-grotesque, used as a stand-in for Söhne until the licensed
-// font is dropped in. Self-hosted by the package, so no build-time fetch.
+// Söhne (Klim) — licensed, self-hosted. 400/400i/500/600 woff2 only; keep the
+// files out of any public distribution beyond serving the app itself.
+const soehne = localFont({
+  src: [
+    { path: "./fonts/soehne-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/soehne-400i.woff2", weight: "400", style: "italic" },
+    { path: "./fonts/soehne-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/soehne-600.woff2", weight: "600", style: "normal" },
+  ],
+  variable: "--font-soehne",
+  display: "swap",
+});
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={GeistSans.variable}>
+    <html lang="en" className={soehne.variable}>
       <body>{children}</body>
     </html>
   );
